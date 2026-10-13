@@ -30,6 +30,6 @@ export const JUEGOS: Juego[] = [
     ruta: 'games/orbita/',
     emoji: '🪐',
     etiquetas: ['incremental', '3D', 'idle'],
-    disponible: false,
+    disponible: true,
   },
 ]

@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         portada: resolve(import.meta.dirname, 'index.html'),
         hormiguero: resolve(import.meta.dirname, 'games/hormiguero/index.html'),
+        orbita: resolve(import.meta.dirname, 'games/orbita/index.html'),
       },
     },
   },

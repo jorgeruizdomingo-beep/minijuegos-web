@@ -15,7 +15,9 @@ type Particula = { x: number; y: number; vx: number; vy: number; vida: number }
 
 const MAX_HORMIGAS = 140
 
-export class Escena {
+import type { Escena } from '../../core/arranque'
+
+export class EscenaHormiguero implements Escena {
   private ctx: CanvasRenderingContext2D
   private hormigas: Hormiga[] = []
   private particulas: Particula[] = []
@@ -58,7 +60,7 @@ export class Escena {
   }
 
   /** Explosión de migas al hacer clic. */
-  estallido(x: number, y: number, n = 10) {
+  clic(x: number, y: number, n = 10) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2
       const s = 60 + Math.random() * 120
