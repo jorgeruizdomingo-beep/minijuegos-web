@@ -6,6 +6,10 @@ import { Incremental, type Config } from './incremental'
 import { UIIncremental, type Textos } from './ui-incremental'
 import { autoguardado } from './save'
 import { fmt, fmtDuration } from './format'
+import { Logros } from './logros'
+import { activarAudio, alternarSilencio, estaSilenciado, sonidos } from './sonido'
+import { abrirPanelPortar } from './portar'
+import { abrirModal } from './modal'
 
 export type Escena = {
   /** Ajusta la escena al tamaño de la "población" (edificios totales). */
@@ -15,10 +19,10 @@ export type Escena = {
   frame(dt: number): void
 }
 
-export function toast(texto: string, ms = 4000) {
+export function toast(texto: string, ms = 4000, clase = '') {
   const toasts = document.getElementById('toasts')!
   const el = document.createElement('div')
-  el.className = 'toast'
+  el.className = `toast ${clase}`
   el.textContent = texto
   toasts.appendChild(el)
   setTimeout(() => el.classList.add('toast--fuera'), ms)
@@ -28,15 +32,21 @@ export function toast(texto: string, ms = 4000) {
 export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: HTMLCanvasElement, juego: Incremental) => Escena) {
   const raiz = document.getElementById('juego')!
   const { juego, offline } = Incremental.cargar(config)
+  const logros = new Logros(juego, textos)
   let escena: Escena
 
   const ui = new UIIncremental(raiz, juego, textos, {
     comprarEdificio(id, cantidad) {
       const n = cantidad === 'max' ? juego.maxComprable(id) : cantidad
-      if (juego.comprarEdificio(id, n)) ui.refrescar()
+      if (juego.comprarEdificio(id, n)) {
+        sonidos.compra()
+        ui.refrescar()
+        ui.destacarEdificio(id)
+      }
     },
     comprarMejora(id) {
       if (juego.comprarMejora(id)) {
+        sonidos.mejora()
         ui.refrescar()
         toast('Mejora comprada 🎉', 2000)
       }
@@ -51,6 +61,7 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
       if (!ok) return
       juego.prestigiar()
       juego.guardar()
+      sonidos.prestigio()
       ui.refrescar()
       escena.poblacion(0)
       toast(`${textos.prestigioAccion}: hecho. ${textos.prestigioNombre}: ${juego.estado.prestigio} ${textos.prestigioEmoji}`, 5000)
@@ -63,6 +74,10 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
     toast(`Mientras no estabas (${fmtDuration(offline.segundos)}) se produjeron ${fmt(offline.recurso)} ${textos.recurso}.`, 7000)
   }
 
+  // El audio solo puede arrancar tras un gesto del usuario.
+  document.addEventListener('pointerdown', activarAudio, { capture: true })
+  document.addEventListener('keydown', activarAudio, { capture: true })
+
   ui.botonClick.addEventListener('pointerdown', (ev) => {
     ev.preventDefault()
     const n = juego.click()
@@ -71,26 +86,47 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
     const y = ev.clientY - r.top
     escena.clic(x, y)
     ui.flotante(x, y, `+${fmt(n)}`)
+    ui.pulsoContador()
+    sonidos.click()
     ui.refrescar()
   })
   ui.botonClick.addEventListener('contextmenu', (ev) => ev.preventDefault())
 
+  const pararAutoguardado = autoguardado(() => juego.guardar())
+  window.addEventListener('pagehide', pararAutoguardado, { once: true })
+
+  // Botones de cabecera
   document.getElementById('btn-guardar')?.addEventListener('click', () => {
     juego.guardar()
     toast('Partida guardada 💾', 1500)
   })
   document.getElementById('btn-reiniciar')?.addEventListener('click', () => {
     if (!confirm(`¿Borrar toda la partida, incluidas las ${textos.prestigioNombre.toLowerCase()}? No se puede deshacer.`)) return
+    pararAutoguardado() // si no, el autoguardado al descargar la página restauraría la partida
     juego.reiniciarTodo()
     location.reload()
   })
-
-  const pararAutoguardado = autoguardado(() => juego.guardar())
-  window.addEventListener('pagehide', pararAutoguardado, { once: true })
+  const btnLogros = document.getElementById('btn-logros')
+  const refrescarBotonLogros = () => {
+    if (btnLogros) btnLogros.textContent = `🏆 ${logros.cuenta}/${logros.lista.length}`
+  }
+  refrescarBotonLogros()
+  btnLogros?.addEventListener('click', () => abrirModal('Logros', logros.panel()))
+  const btnSonido = document.getElementById('btn-sonido')
+  const refrescarBotonSonido = () => {
+    if (btnSonido) btnSonido.textContent = estaSilenciado() ? '🔇' : '🔊'
+  }
+  refrescarBotonSonido()
+  btnSonido?.addEventListener('click', () => {
+    alternarSilencio()
+    refrescarBotonSonido()
+  })
+  document.getElementById('btn-portar')?.addEventListener('click', () => abrirPanelPortar(juego, pararAutoguardado))
 
   const tituloBase = document.title
   let ultimo = performance.now()
   let acumUI = 0
+  let acumLogros = 0
   function bucle(ahora: number) {
     const dt = Math.min(1, (ahora - ultimo) / 1000)
     ultimo = ahora
@@ -102,6 +138,16 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
       acumUI = 0
       ui.refrescar()
       document.title = `${fmt(juego.estado.recurso)} ${textos.recurso} · ${tituloBase}`
+    }
+    acumLogros += dt
+    if (acumLogros >= 1) {
+      acumLogros = 0
+      const nuevos = logros.comprobar()
+      if (nuevos.length) {
+        sonidos.logro()
+        for (const l of nuevos) toast(`${l.emoji} Logro: ${l.nombre}`, 4000, 'toast--logro')
+        refrescarBotonLogros()
+      }
     }
     requestAnimationFrame(bucle)
   }
