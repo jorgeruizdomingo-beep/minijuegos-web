@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Micelio: incremental de cadenas de producción. Cada eslabón hace crecer al de abajo." />
+    <title>Micelio</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="../../">🎮 Minijuegos</a>
+      <span class="muted">🍄 Micelio</span>
+      <div class="topbar__actions">
+        <button id="btn-guardar" title="Guardar ahora">💾</button>
+        <button id="btn-reiniciar" title="Borrar la partida">🗑️</button>
+      </div>
+    </header>
+    <main id="juego" class="juego"></main>
+    <div id="toasts" class="toasts"></div>
+    <script type="module" src="/src/games/micelio/main.ts"></script>
+  </body>
+</html>

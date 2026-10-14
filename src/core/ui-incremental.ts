@@ -157,12 +157,14 @@ export class UIIncremental {
       }
       const cant = this.cantidad === 'max' ? Math.max(1, j.maxComprable(ed.id)) : this.cantidad
       const coste = j.costeEdificio(ed.id, cant)
-      fila.querySelector('.edificio__n')!.textContent = n > 0 ? `×${n}` : ''
+      fila.querySelector('.edificio__n')!.textContent = n >= 1 ? `×${Number.isInteger(n) && n < 1e6 ? n : fmt(Math.floor(n))}` : ''
       fila.querySelector('.edificio__coste')!.textContent = `${fmt(coste)}${cant > 1 ? ` (×${cant})` : ''}`
+      // En una cadena, la producción se expresa en unidades del edificio que genera.
+      const destino = ed.genera ? ` ${this.emojiDe(ed.genera)}` : ''
       fila.querySelector('.edificio__prod')!.textContent =
         n > 0
-          ? `${fmtRate(j.produccionUnidad(ed.id))} cada uno · ${fmtRate(j.produccionEdificio(ed.id))} en total`
-          : `${fmtRate(j.produccionUnidad(ed.id))} cada uno`
+          ? `${fmtRate(j.produccionUnidad(ed.id))}${destino} cada uno · ${fmtRate(j.produccionEdificio(ed.id))}${destino} en total`
+          : `${fmtRate(j.produccionUnidad(ed.id))}${destino} cada uno`
       fila.disabled = e.recurso < coste
     }
 
@@ -207,6 +209,10 @@ export class UIIncremental {
         ${t.prestigioAccion}${ganables > 0 ? ` (+${ganables} ${t.prestigioEmoji})` : ''}
       </button>
     `
+  }
+
+  private emojiDe(idEdificio: string): string {
+    return this.juego.config.edificios.find((e) => e.id === idEdificio)?.emoji ?? ''
   }
 
   private set(sel: string, texto: string) {
