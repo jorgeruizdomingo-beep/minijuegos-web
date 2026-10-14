@@ -52,8 +52,9 @@
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-click:hover { background: rgba(255,255,255,0.02); }
-.btn-click:active { transform: none; background: rgba(245,179,66,0.06); }
+/* Más específicos que `button:hover:not(:disabled)` de base.css, que si no pintaría el botón opaco sobre la escena. */
+.btn-click:hover:not(:disabled) { background: rgba(255,255,255,0.02); border-color: transparent; }
+.btn-click:active:not(:disabled) { transform: none; background: rgba(245,179,66,0.06); }
 
 .flotante {
   position: absolute;
