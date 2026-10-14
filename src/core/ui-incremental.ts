@@ -1,8 +1,23 @@
-import { EDIFICIOS, MEJORAS } from './data'
-import type { Juego } from './game'
-import { fmt, fmtRate } from '../../core/format'
+/**
+ * Interfaz compartida de los juegos incrementales: contador, escena (un canvas
+ * que cada juego pinta a su manera), panel de prestigio y tienda.
+ */
+import type { Incremental } from './incremental'
+import { fmt, fmtRate } from './format'
 
 export type Cantidad = 1 | 10 | 100 | 'max'
+
+export type Textos = {
+  recurso: string // "migas"
+  tienda: string // "Colonia"
+  accionClick: string // "Recoger miga" (aria-label)
+  prestigioNombre: string // "Feromonas"
+  prestigioEmoji: string // "🧪"
+  prestigioUnidad: string // "feromona"
+  prestigioVida: string // "colonia"
+  prestigioAccion: string // "Fundar nueva colonia"
+  sinMejoras: string
+}
 
 type Acciones = {
   comprarEdificio: (id: string, cantidad: Cantidad) => void
@@ -10,38 +25,41 @@ type Acciones = {
   prestigiar: () => void
 }
 
-export class UI {
+export class UIIncremental {
   private raiz: HTMLElement
-  private juego: Juego
+  private juego: Incremental
+  private textos: Textos
   private acciones: Acciones
   private cantidad: Cantidad = 1
-  private filasEdificio = new Map<string, HTMLElement>()
+  private filasEdificio = new Map<string, HTMLButtonElement>()
   private ultimasMejoras = ''
   private ultimoPrestigio = ''
 
-  constructor(raiz: HTMLElement, juego: Juego, acciones: Acciones) {
+  constructor(raiz: HTMLElement, juego: Incremental, textos: Textos, acciones: Acciones) {
     this.raiz = raiz
     this.juego = juego
+    this.textos = textos
     this.acciones = acciones
     this.construir()
   }
 
   private construir() {
+    const t = this.textos
     this.raiz.innerHTML = `
       <section class="panel panel--escena">
         <div class="contador">
-          <div class="contador__migas mono" id="migas">0</div>
+          <div class="contador__recurso"><span id="recurso" class="mono">0</span> <span class="contador__unidad">${t.recurso}</span></div>
           <div class="contador__sub muted"><span id="prod" class="mono">0/s</span> · <span id="porclick" class="mono">1</span> por clic</div>
         </div>
         <div class="escena">
           <canvas id="canvas"></canvas>
-          <button id="btn-click" class="btn-click" aria-label="Recoger miga"></button>
+          <button id="btn-click" class="btn-click" aria-label="${t.accionClick}"></button>
         </div>
         <div class="prestigio" id="prestigio"></div>
       </section>
       <section class="panel panel--tienda">
         <div class="tienda__cab">
-          <h2>Colonia</h2>
+          <h2>${t.tienda}</h2>
           <div class="cantidades" id="cantidades">
             <button data-cant="1" class="activo">x1</button>
             <button data-cant="10">x10</button>
@@ -51,12 +69,12 @@ export class UI {
         </div>
         <div class="lista" id="edificios"></div>
         <h2>Mejoras</h2>
-        <div class="mejoras" id="mejoras"><p class="muted">Sigue recogiendo migas: las mejoras aparecen al crecer.</p></div>
+        <div class="mejoras" id="mejoras"></div>
       </section>
     `
 
     const lista = this.raiz.querySelector<HTMLElement>('#edificios')!
-    for (const e of EDIFICIOS) {
+    for (const e of this.juego.config.edificios) {
       const fila = document.createElement('button')
       fila.className = 'edificio'
       fila.dataset.id = e.id
@@ -101,7 +119,7 @@ export class UI {
     return this.raiz.querySelector('#btn-click')!
   }
 
-  /** Texto flotante "+N" sobre el punto de clic. */
+  /** Texto flotante "+N" sobre el punto de clic (coordenadas relativas a la escena). */
   flotante(x: number, y: number, texto: string) {
     const escena = this.raiz.querySelector<HTMLElement>('.escena')!
     const el = document.createElement('span')
@@ -116,18 +134,18 @@ export class UI {
   refrescar() {
     const j = this.juego
     const e = j.estado
-    this.set('#migas', fmt(e.migas))
+    const t = this.textos
+    this.set('#recurso', fmt(e.recurso))
     this.set('#prod', fmtRate(j.produccionTotal()))
-    this.set('#porclick', fmt(j.migasPorClick()))
-    document.title = `${fmt(e.migas)} migas · Hormiguero`
+    this.set('#porclick', fmt(j.recursoPorClick()))
 
     // Un edificio se muestra si ya tienes alguno o has acumulado parte de su coste.
     // El siguiente al último visible se enseña atenuado como anticipo.
     let anticipoMostrado = false
-    for (const ed of EDIFICIOS) {
+    for (const ed of j.config.edificios) {
       const fila = this.filasEdificio.get(ed.id)!
-      const n = e.edificios[ed.id] ?? 0
-      const visible = ed === EDIFICIOS[0] || n > 0 || e.migasTotales >= ed.costeBase * 0.3
+      const n = j.cantidad(ed.id)
+      const visible = ed === j.config.edificios[0] || n > 0 || e.total >= ed.costeBase * 0.3
       if (!visible) {
         fila.hidden = anticipoMostrado
         fila.classList.toggle('edificio--anticipo', !anticipoMostrado)
@@ -141,10 +159,11 @@ export class UI {
       const coste = j.costeEdificio(ed.id, cant)
       fila.querySelector('.edificio__n')!.textContent = n > 0 ? `×${n}` : ''
       fila.querySelector('.edificio__coste')!.textContent = `${fmt(coste)}${cant > 1 ? ` (×${cant})` : ''}`
-      const prodUnidad = ed.produccion * j.multiplicadorEdificio(ed.id) * j.multiplicadorGlobal()
       fila.querySelector('.edificio__prod')!.textContent =
-        n > 0 ? `${fmtRate(prodUnidad)} cada una · ${fmtRate(j.produccionEdificio(ed.id))} en total` : `${fmtRate(prodUnidad)} cada una`
-      ;(fila as HTMLButtonElement).disabled = e.migas < coste
+        n > 0
+          ? `${fmtRate(j.produccionUnidad(ed.id))} cada uno · ${fmtRate(j.produccionEdificio(ed.id))} en total`
+          : `${fmtRate(j.produccionUnidad(ed.id))} cada uno`
+      fila.disabled = e.recurso < coste
     }
 
     // Mejoras: reconstruir solo si cambia la lista disponible.
@@ -164,27 +183,28 @@ export class UI {
           </button>`,
             )
             .join('')
-        : `<p class="muted">Sigue creciendo: las mejoras aparecen al alcanzar hitos.</p>`
+        : `<p class="muted">${t.sinMejoras}</p>`
     }
     cont.querySelectorAll<HTMLButtonElement>('button[data-mejora]').forEach((b) => {
-      const m = MEJORAS.find((x) => x.id === b.dataset.mejora)!
-      b.disabled = e.migas < m.coste
+      const m = j.config.mejoras.find((x) => x.id === b.dataset.mejora)!
+      b.disabled = e.recurso < m.coste
     })
 
-    // Prestigio
-    const ganables = j.feromonasGanables()
-    const siguiente = j.migasParaSiguienteFeromona()
-    const firmaPrestigio = `${e.feromonas}|${e.colonias}|${ganables}|${fmt(siguiente)}|${fmt(e.migasHistoricas)}`
+    // Prestigio: reconstruir solo si cambia algo visible.
+    const ganables = j.prestigioGanable()
+    const siguiente = j.historicoParaSiguientePrestigio()
+    const firmaPrestigio = `${e.prestigio}|${e.vidas}|${ganables}|${fmt(siguiente)}|${fmt(e.historico)}`
     if (firmaPrestigio === this.ultimoPrestigio) return
     this.ultimoPrestigio = firmaPrestigio
+    const bonus = Math.round(e.prestigio * j.config.prestigio.bonus * 100)
     this.raiz.querySelector<HTMLElement>('#prestigio')!.innerHTML = `
       <div class="prestigio__info">
-        <strong>🧪 Feromonas: <span class="mono">${e.feromonas}</span></strong>
-        <span class="muted">+${Math.round(e.feromonas * 5)}% producción · colonia nº ${e.colonias + 1}</span>
-        <span class="muted">Siguiente feromona a <span class="mono">${fmt(siguiente)}</span> migas históricas (<span class="mono">${fmt(e.migasHistoricas)}</span>)</span>
+        <strong>${t.prestigioEmoji} ${t.prestigioNombre}: <span class="mono">${e.prestigio}</span></strong>
+        <span class="muted">+${bonus}% producción · ${t.prestigioVida} nº ${e.vidas + 1}</span>
+        <span class="muted">Siguiente ${t.prestigioUnidad} a <span class="mono">${fmt(siguiente)}</span> ${t.recurso} históricas (<span class="mono">${fmt(e.historico)}</span>)</span>
       </div>
       <button id="btn-prestigio" class="btn-prestigio" ${ganables > 0 ? '' : 'disabled'}>
-        Fundar nueva colonia${ganables > 0 ? ` (+${ganables} 🧪)` : ''}
+        ${t.prestigioAccion}${ganables > 0 ? ` (+${ganables} ${t.prestigioEmoji})` : ''}
       </button>
     `
   }
