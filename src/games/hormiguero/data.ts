@@ -143,6 +143,8 @@ export const CONFIG: Config = {
   crecimientoCoste: 1.15,
   prestigio: { base: 10_000_000, bonus: 0.05 },
   maxOfflineSeg: 8 * 3600,
+  // Miga dorada: cada 2-4 minutos aparece sobre la escena; si la pinchas, x7 durante 30 s.
+  evento: { nombre: 'Miga dorada', emoji: '🍪', esperaMinSeg: 120, esperaMaxSeg: 240, visibleSeg: 12, duracionSeg: 30, mult: 7 },
 }
 
 export const TEXTOS: Textos = {
