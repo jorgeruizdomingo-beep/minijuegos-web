@@ -56,6 +56,17 @@ export class EscenaOrbita implements Escena {
   private juego: Incremental
   private dummy = new THREE.Object3D()
   private movil: boolean
+  // Elementos que aparecen según el árbol permanente y la historia de la partida.
+  private anillos: THREE.Mesh
+  private luna: THREE.Mesh
+  private nebulosa: THREE.Sprite
+  private fondo: THREE.Points
+  private sol: THREE.DirectionalLight
+  private nucleo: THREE.Mesh
+  private matTierra: THREE.MeshStandardMaterial
+  private tierra: THREE.Group
+  private escalaEstrella = 7
+  private opacidadAtmosfera = 0.18
 
   constructor(canvas: HTMLCanvasElement, juego: Incremental) {
     this.canvas = canvas
@@ -71,6 +82,7 @@ export class EscenaOrbita implements Escena {
     const sol = new THREE.DirectionalLight(0xfff2d6, 2.2)
     sol.position.copy(POS_ESTRELLA)
     this.scene.add(sol)
+    this.sol = sol
     this.scene.add(new THREE.AmbientLight(0x404a66, 0.9))
     this.luzEstrella = new THREE.PointLight(0xffd27a, 0, 40, 1.5)
     this.luzEstrella.position.copy(POS_ESTRELLA)
@@ -86,6 +98,7 @@ export class EscenaOrbita implements Escena {
     const nucleo = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 24), new THREE.MeshBasicMaterial({ color: 0xfff4d0 }))
     nucleo.position.copy(POS_ESTRELLA)
     this.scene.add(nucleo)
+    this.nucleo = nucleo
 
     // Rayo de la llamarada: un cilindro fino y luminoso entre la estrella y el planeta, reutilizado en cada clic.
     const largo = POS_ESTRELLA.length() - RADIO_PLANETA
@@ -144,6 +157,8 @@ export class EscenaOrbita implements Escena {
     // Continentes: manchas aleatorias fijas sobre la esfera.
     const tierra = new THREE.Group()
     const matTierra = new THREE.MeshStandardMaterial({ color: 0x4caf6a, roughness: 0.9 })
+    this.matTierra = matTierra
+    this.tierra = tierra
     let semilla = 7
     const rnd = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647)
     for (let i = 0; i < 14; i++) {
@@ -170,7 +185,25 @@ export class EscenaOrbita implements Escena {
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-    this.scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.8 })))
+    this.fondo = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.8 }))
+    this.scene.add(this.fondo)
+
+    // Desbloqueos del árbol: anillos del planeta, luna natural y nebulosa de fondo. Ocultos hasta comprarlos.
+    this.anillos = new THREE.Mesh(
+      new THREE.RingGeometry(RADIO_PLANETA * 1.25, RADIO_PLANETA * 1.6, 64),
+      new THREE.MeshBasicMaterial({ color: 0xd8c6a2, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
+    )
+    this.anillos.rotation.set(Math.PI / 2 + 0.45, 0, 0.2)
+    this.anillos.visible = false
+    this.scene.add(this.anillos)
+    this.luna = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 14), new THREE.MeshStandardMaterial({ color: 0xc9c4b8, roughness: 1 }))
+    this.luna.visible = false
+    this.scene.add(this.luna)
+    this.nebulosa = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaResplandor(), color: 0x7a5cff, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }))
+    this.nebulosa.position.set(-16, 5, -34)
+    this.nebulosa.scale.set(46, 30, 1)
+    this.nebulosa.visible = false
+    this.scene.add(this.nebulosa)
 
     // Capas de órbita, una por tipo de edificio
     for (const e of CONFIG.edificios) {
@@ -270,6 +303,34 @@ export class EscenaOrbita implements Escena {
     this.distanciaObjetivo = (5 + radioExterior * 1.3) * estrechez
   }
 
+  /** La escena evoluciona con el árbol permanente, los núcleos, las vidas y las mejoras compradas. */
+  cambio() {
+    const j = this.juego
+    this.anillos.visible = j.tieneDesbloqueo('anillos')
+    this.luna.visible = j.tieneDesbloqueo('luna')
+    this.nebulosa.visible = j.tieneDesbloqueo('nebulosa')
+
+    // Estrella: de amarilla a blanca con los núcleos acumulados; azul y más grande con el nodo Gigante azul.
+    const azul = j.tieneDesbloqueo('estrella_azul')
+    const t = azul ? 1 : Math.min(1, j.estado.prestigio / 40)
+    const color = new THREE.Color(0xffe3a3).lerp(new THREE.Color(azul ? 0x9fd0ff : 0xfff8ec), t)
+    ;(this.estrella.material as THREE.SpriteMaterial).color.copy(color)
+    ;(this.nucleo.material as THREE.MeshBasicMaterial).color.copy(new THREE.Color(0xfff4d0).lerp(new THREE.Color(azul ? 0xd8ecff : 0xffffff), t))
+    this.sol.color.copy(new THREE.Color(0xfff2d6).lerp(new THREE.Color(azul ? 0xcfe4ff : 0xffffff), t))
+    this.escalaEstrella = azul ? 9.5 : 7 + t
+
+    // Planeta: con cada vida (Supernova) los continentes crecen y la atmósfera se espesa.
+    const vida = Math.min(1, j.estado.vidas / 8)
+    this.matTierra.color.copy(new THREE.Color(0x4caf6a).lerp(new THREE.Color(0x7fd98f), vida))
+    this.tierra.scale.setScalar(1 + vida * 0.2)
+    this.opacidadAtmosfera = 0.18 + vida * 0.14
+
+    // Cielo: las mejoras globales compradas lo llenan de estrellas más brillantes.
+    const globales = ['global_1', 'global_2', 'global_3', 'global_4', 'global_5', 'global_6'].filter((id) => j.tieneMejora(id)).length
+    ;(this.fondo.material as THREE.PointsMaterial).opacity = 0.6 + globales * 0.07
+    ;(this.fondo.material as THREE.PointsMaterial).size = 0.14 + globales * 0.02
+  }
+
   /** Llamarada: la estrella destella y lanza un rayo al planeta, que responde con una onda. */
   clic(_x: number, _y: number) {
     this.pulso = 1
@@ -351,11 +412,13 @@ export class EscenaOrbita implements Escena {
     const esc = 1 + this.pulso * 0.08
     this.planeta.scale.setScalar(esc)
     this.atmosfera.scale.setScalar(esc)
-    ;(this.atmosfera.material as THREE.MeshBasicMaterial).opacity = 0.18 + this.pulso * 0.3
+    ;(this.atmosfera.material as THREE.MeshBasicMaterial).opacity = this.opacidadAtmosfera + this.pulso * 0.3
     this.planeta.rotation.y += dt * 0.08
     this.nubes.rotation.y += dt * 0.11
     this.nubes.scale.setScalar(esc)
-    this.estrella.scale.setScalar(7 + Math.sin(this.tiempo * 1.3) * 0.25 + this.pulso * 3)
+    this.estrella.scale.setScalar(this.escalaEstrella + Math.sin(this.tiempo * 1.3) * 0.25 + this.pulso * 3)
+    this.anillos.rotation.z = 0.2 + Math.sin(this.tiempo * 0.1) * 0.05
+    if (this.luna.visible) this.luna.position.set(Math.cos(this.tiempo * 0.5) * 1.75, Math.sin(this.tiempo * 0.5) * 0.6, Math.sin(this.tiempo * 0.5) * 1.75)
     this.luzEstrella.intensity = this.pulso * 60
 
     for (const capa of this.capas.values()) {
