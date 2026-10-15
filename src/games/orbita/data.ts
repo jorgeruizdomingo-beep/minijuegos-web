@@ -63,6 +63,35 @@ export const CONFIG: Config = {
   maxOfflineSeg: 8 * 3600,
   // Evento sorpresa del motor. Se llama "tormenta" y no "llamarada" para no confundirlo con el clic.
   evento: { nombre: 'Tormenta solar', emoji: '🌞', esperaMinSeg: 120, esperaMaxSeg: 240, visibleSeg: 12, duracionSeg: 30, mult: 7 },
+  // Árbol permanente: se compra con fragmentos estelares, que da cada Supernova.
+  arbol: {
+    fichaNombre: 'fragmento estelar',
+    fichaPlural: 'fragmentos estelares',
+    fichaEmoji: '💠',
+    nodos: [
+      // Raíz
+      { id: 'memoria', nombre: 'Memoria orbital', descripcion: 'Cada sistema nuevo hereda los planos del anterior: producción +25 %.', emoji: '🧠', coste: 1, efecto: { tipo: 'global', mult: 1.25 } },
+
+      // Rama Ingeniería: arranque, precios y el aspecto del planeta.
+      { id: 'astilleros', nombre: 'Astilleros heredados', descripcion: 'Cada sistema empieza con 10 paneles solares ya en órbita.', emoji: '🏗️', coste: 2, requiere: ['memoria'], efecto: { tipo: 'arranque', edificio: 'panel', cantidad: 10 } },
+      { id: 'contratos', nombre: 'Contratos estelares', descripcion: 'Todo lo que compras sale un 10 % más barato.', emoji: '📜', coste: 2, requiere: ['memoria'], efecto: { tipo: 'descuento', porcentaje: 0.1 } },
+      { id: 'anillos', nombre: 'Anillos planetarios', descripcion: 'El planeta luce un sistema de anillos. Visible en la escena.', emoji: '🪐', coste: 3, requiere: ['astilleros'], efecto: { tipo: 'desbloqueo', clave: 'anillos' } },
+      { id: 'monopolio', nombre: 'Monopolio orbital', descripcion: 'Otro 15 % de descuento en todos los edificios.', emoji: '🏦', coste: 5, requiere: ['contratos'], efecto: { tipo: 'descuento', porcentaje: 0.15 } },
+
+      // Rama Estrella: el clic y el aspecto de la estrella y el cielo.
+      { id: 'corona', nombre: 'Corona activa', descripcion: 'Las llamaradas son tres veces más potentes: cada clic x3.', emoji: '🔥', coste: 2, requiere: ['memoria'], efecto: { tipo: 'click', mult: 3 } },
+      { id: 'nebulosa', nombre: 'Nebulosa', descripcion: 'El sistema nace dentro de una nebulosa. Visible en la escena.', emoji: '🌌', coste: 3, requiere: ['corona'], efecto: { tipo: 'desbloqueo', clave: 'nebulosa' } },
+      { id: 'gigante', nombre: 'Gigante azul', descripcion: 'La estrella se convierte en una gigante azul, más grande y brillante. Visible en la escena.', emoji: '💙', coste: 4, requiere: ['nebulosa'], efecto: { tipo: 'desbloqueo', clave: 'estrella_azul' } },
+
+      // Rama Legado: tiempo fuera, fragmentos y una luna.
+      { id: 'cronometro', nombre: 'Cronómetro orbital', descripcion: 'La red sigue produciendo cuatro horas más mientras no miras.', emoji: '⏱️', coste: 3, requiere: ['memoria'], efecto: { tipo: 'offline', horas: 4 } },
+      { id: 'luna', nombre: 'Luna capturada', descripcion: 'Una luna natural orbita el planeta. Visible en la escena.', emoji: '🌙', coste: 3, requiere: ['cronometro'], efecto: { tipo: 'desbloqueo', clave: 'luna' } },
+      { id: 'cosecha', nombre: 'Cosecha de supernovas', descripcion: 'Cada Supernova deja un 50 % más de fragmentos.', emoji: '💎', coste: 4, requiere: ['cronometro'], efecto: { tipo: 'fichas', porcentaje: 0.5 } },
+
+      // Cima: exige las tres ramas.
+      { id: 'motor', nombre: 'Motor estelar', descripcion: 'Toda la estrella trabaja para ti: producción x2.', emoji: '🚀', coste: 8, requiere: ['anillos', 'gigante', 'cosecha'], efecto: { tipo: 'global', mult: 2 } },
+    ],
+  },
 }
 
 export const TEXTOS: Textos = {
