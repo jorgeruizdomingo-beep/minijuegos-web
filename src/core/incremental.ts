@@ -38,6 +38,17 @@ export type Mejora = {
   efecto: EfectoMejora
 }
 
+/** Evento sorpresa opcional: algo aparece sobre la escena y, si se pincha, multiplica la producción un rato. */
+export type EventoConfig = {
+  nombre: string // "Miga dorada"
+  emoji: string // "🍪"
+  esperaMinSeg: number
+  esperaMaxSeg: number
+  visibleSeg: number // tiempo que espera a que lo pinches
+  duracionSeg: number
+  mult: number
+}
+
 export type Config = {
   claveGuardado: string
   versionGuardado: number
@@ -49,6 +60,8 @@ export type Config = {
     bonus: number // producción extra por punto (0.05 = +5%)
   }
   maxOfflineSeg: number
+  /** Si existe, el motor gestiona el evento sorpresa (botón sobre la escena). */
+  evento?: EventoConfig
 }
 
 export type Estado = {
@@ -88,6 +101,8 @@ export class Incremental {
   private hayCadenas: boolean
   /** Multiplicador pasajero (eventos en pantalla). No se guarda ni cuenta para el progreso offline. */
   multiplicadorTemporal = 1
+  /** Bonus permanente por logros (0.25 = +25 %). Lo fija el arranque a partir de los logros desbloqueados. */
+  bonusLogros = 0
 
   constructor(config: Config, estado?: Estado) {
     this.config = config
@@ -119,7 +134,7 @@ export class Incremental {
   }
 
   multiplicadorGlobal(): number {
-    let m = (1 + this.estado.prestigio * this.config.prestigio.bonus) * this.multiplicadorTemporal
+    let m = (1 + this.estado.prestigio * this.config.prestigio.bonus) * (1 + this.bonusLogros) * this.multiplicadorTemporal
     for (const id of this.estado.mejoras) {
       const mej = this.mejorasPorId.get(id)
       if (mej?.efecto.tipo === 'global') m *= mej.efecto.mult
@@ -309,10 +324,13 @@ export class Incremental {
   }
 
   /** Carga el guardado (si existe) y abona el progreso offline. */
-  static cargar(config: Config): { juego: Incremental; offline: { recurso: number; segundos: number } | null } {
+  static cargar(config: Config, preparar?: (j: Incremental) => void): { juego: Incremental; offline: { recurso: number; segundos: number } | null } {
     const g = cargar<Estado>(config.claveGuardado, config.versionGuardado)
     const vacio = new Incremental(config)
-    if (!g) return { juego: vacio, offline: null }
+    if (!g) {
+      preparar?.(vacio)
+      return { juego: vacio, offline: null }
+    }
     // Rellena campos que puedan faltar en guardados antiguos. Sin cadenas, todo lo que hay se compró.
     const estado: Estado = {
       ...vacio.estadoInicial(),
@@ -321,6 +339,7 @@ export class Incremental {
       comprados: g.data.comprados ?? { ...g.data.edificios },
     }
     const juego = new Incremental(config, estado)
+    preparar?.(juego) // p. ej. fijar bonus por logros antes de abonar el tiempo fuera
     const offline = g.elapsedSec > 5 ? juego.progresoOffline(g.elapsedSec) : null
     return { juego, offline }
   }

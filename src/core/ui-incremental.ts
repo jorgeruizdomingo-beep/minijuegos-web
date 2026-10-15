@@ -213,14 +213,15 @@ export class UIIncremental {
     // Prestigio: reconstruir solo si cambia algo visible.
     const ganables = j.prestigioGanable()
     const siguiente = j.historicoParaSiguientePrestigio()
-    const firmaPrestigio = `${e.prestigio}|${e.vidas}|${ganables}|${fmt(siguiente)}|${fmt(e.historico)}`
+    const bonusLogros = Math.round(j.bonusLogros * 100)
+    const firmaPrestigio = `${e.prestigio}|${e.vidas}|${ganables}|${fmt(siguiente)}|${fmt(e.historico)}|${bonusLogros}`
     if (firmaPrestigio === this.ultimoPrestigio) return
     this.ultimoPrestigio = firmaPrestigio
     const bonus = Math.round(e.prestigio * j.config.prestigio.bonus * 100)
     this.raiz.querySelector<HTMLElement>('#prestigio')!.innerHTML = `
       <div class="prestigio__info">
         <strong>${t.prestigioEmoji} ${t.prestigioNombre}: <span class="mono">${e.prestigio}</span></strong>
-        <span class="muted">+${bonus}% producción · ${t.prestigioVida} nº ${e.vidas + 1}</span>
+        <span class="muted">+${bonus}% producción${bonusLogros > 0 ? ` · 🏆 +${bonusLogros}% por logros` : ''} · ${t.prestigioVida} nº ${e.vidas + 1}</span>
         <span class="muted">Siguiente ${t.prestigioUnidad} a <span class="mono">${fmt(siguiente)}</span> ${t.recurso} históricas (<span class="mono">${fmt(e.historico)}</span>)</span>
       </div>
       <button id="btn-prestigio" class="btn-prestigio" ${ganables > 0 ? '' : 'disabled'}>
