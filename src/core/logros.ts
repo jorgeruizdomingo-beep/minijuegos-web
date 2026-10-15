@@ -119,7 +119,9 @@ export class Logros {
   private leer(): string[] {
     try {
       const raw = localStorage.getItem(this.clave)
-      return raw ? (JSON.parse(raw) as string[]) : []
+      const lista: unknown = raw ? JSON.parse(raw) : []
+      // Un import corrupto puede traer cualquier cosa: solo valen listas de ids.
+      return Array.isArray(lista) ? lista.filter((id): id is string => typeof id === 'string') : []
     } catch {
       return []
     }
