@@ -92,6 +92,10 @@ export const CONFIG: Config = {
 
       // Cima: exige las tres ramas.
       { id: 'motor', nombre: 'Motor estelar', descripcion: 'Toda la estrella trabaja para ti: producción x2.', emoji: '🚀', coste: 8, requiere: ['anillos', 'gigante', 'cosecha'], efecto: { tipo: 'global', mult: 2 } },
+
+      // Sumideros repetibles para los fragmentos que sobran una vez completado el árbol.
+      { id: 'forja', nombre: 'Forja estelar', descripcion: 'Cada nivel afina la red: producción +10 % (hasta 10 niveles).', emoji: '⚒️', coste: 3, requiere: ['motor'], repetible: { maximo: 10, crecimientoCoste: 1.5 }, efecto: { tipo: 'global', mult: 1.1 } },
+      { id: 'reliquias', nombre: 'Reliquias de supernova', descripcion: 'Cada nivel deja un 10 % más de fragmentos por Supernova, sin tope.', emoji: '🔮', coste: 2, requiere: ['cosecha'], repetible: { crecimientoCoste: 1.35 }, efecto: { tipo: 'fichas', porcentaje: 0.1 } },
     ],
   },
 }
