@@ -32,4 +32,15 @@ export const JUEGOS: Juego[] = [
     etiquetas: ['incremental', '3D', 'idle'],
     disponible: true,
   },
+  {
+    id: 'micelio',
+    nombre: 'Micelio',
+    lema: 'Cada eslabón hace crecer al de abajo.',
+    descripcion:
+      'Incremental de cadenas: las setas tejen micelio, el micelio teje hifas y las hifas absorben nutrientes. Pincha la lluvia cuando aparezca.',
+    ruta: 'games/micelio/',
+    emoji: '🍄',
+    etiquetas: ['incremental', 'cadenas', 'idle'],
+    disponible: true,
+  },
 ]

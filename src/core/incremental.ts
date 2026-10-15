@@ -1,6 +1,8 @@
 /**
  * Motor genérico de juego incremental: recurso principal, edificios con coste
  * creciente, mejoras desbloqueables por hitos, prestigio y progreso offline.
+ * Opcionalmente, cadenas de producción: un edificio con `genera` produce
+ * unidades de otro edificio en vez de recurso.
  * Cada juego aporta su configuración (datos de balance) y su presentación.
  */
 import { borrar, cargar, guardar } from './save'
@@ -11,7 +13,8 @@ export type Edificio = {
   descripcion: string
   emoji: string
   costeBase: number
-  produccion: number // unidades de recurso por segundo por edificio
+  produccion: number // unidades de recurso (o del edificio de `genera`) por segundo por edificio
+  genera?: string // si existe, produce unidades de este edificio en vez de recurso
 }
 
 export type EfectoMejora =
@@ -54,6 +57,8 @@ export type Estado = {
   historico: number // en todas las vidas
   clicks: number
   edificios: Record<string, number>
+  /** Unidades compradas (las generadas por una cadena no cuentan). Un id ausente vale 0. */
+  comprados?: Record<string, number>
   mejoras: string[]
   prestigio: number
   vidas: number // veces que se ha hecho prestigio
@@ -80,11 +85,15 @@ export class Incremental {
   readonly config: Config
   private mejorasPorId: Map<string, Mejora>
   private edificiosPorId: Map<string, Edificio>
+  private hayCadenas: boolean
+  /** Multiplicador pasajero (eventos en pantalla). No se guarda ni cuenta para el progreso offline. */
+  multiplicadorTemporal = 1
 
   constructor(config: Config, estado?: Estado) {
     this.config = config
     this.mejorasPorId = new Map(config.mejoras.map((m) => [m.id, m]))
     this.edificiosPorId = new Map(config.edificios.map((e) => [e.id, e]))
+    this.hayCadenas = config.edificios.some((e) => e.genera)
     this.estado = estado ?? this.estadoInicial()
   }
 
@@ -95,6 +104,7 @@ export class Incremental {
       historico: 0,
       clicks: 0,
       edificios: Object.fromEntries(this.config.edificios.map((e) => [e.id, 0])),
+      comprados: {},
       mejoras: [],
       prestigio: 0,
       vidas: 0,
@@ -109,7 +119,7 @@ export class Incremental {
   }
 
   multiplicadorGlobal(): number {
-    let m = 1 + this.estado.prestigio * this.config.prestigio.bonus
+    let m = (1 + this.estado.prestigio * this.config.prestigio.bonus) * this.multiplicadorTemporal
     for (const id of this.estado.mejoras) {
       const mej = this.mejorasPorId.get(id)
       if (mej?.efecto.tipo === 'global') m *= mej.efecto.mult
@@ -130,14 +140,22 @@ export class Incremental {
     return this.estado.edificios[idEdificio] ?? 0
   }
 
+  /** Unidades compradas de un edificio (sin las generadas por cadenas). */
+  compradas(idEdificio: string): number {
+    return this.estado.comprados?.[idEdificio] ?? 0
+  }
+
   totalEdificios(): number {
     return Object.values(this.estado.edificios).reduce((a, b) => a + b, 0)
   }
 
-  /** Producción por segundo de una unidad de un edificio. */
+  /** Producción por segundo de una unidad de un edificio (de recurso, o del edificio de `genera`). */
   produccionUnidad(idEdificio: string): number {
     const e = this.edificiosPorId.get(idEdificio)!
-    return e.produccion * this.multiplicadorEdificio(e.id) * this.multiplicadorGlobal()
+    // Los multiplicadores globales solo tocan al recurso: aplicados a cada eslabón de una cadena
+    // se compondrían (prestigio^n) y el juego se desbocaría.
+    const global = e.genera ? 1 : this.multiplicadorGlobal()
+    return e.produccion * this.multiplicadorEdificio(e.id) * global
   }
 
   /** Producción por segundo de todas las unidades de un edificio. */
@@ -146,7 +164,7 @@ export class Incremental {
   }
 
   produccionTotal(): number {
-    return this.config.edificios.reduce((s, e) => s + this.produccionEdificio(e.id), 0)
+    return this.config.edificios.reduce((s, e) => (e.genera ? s : s + this.produccionEdificio(e.id)), 0)
   }
 
   recursoPorClick(): number {
@@ -163,7 +181,7 @@ export class Incremental {
 
   costeEdificio(idEdificio: string, cantidad = 1): number {
     const e = this.edificiosPorId.get(idEdificio)!
-    const n = this.cantidad(e.id)
+    const n = this.compradas(e.id)
     let total = 0
     for (let i = 0; i < cantidad; i++) total += Math.ceil(e.costeBase * this.config.crecimientoCoste ** (n + i))
     return total
@@ -172,7 +190,7 @@ export class Incremental {
   /** Cuántas unidades se pueden comprar con el recurso actual. */
   maxComprable(idEdificio: string): number {
     const e = this.edificiosPorId.get(idEdificio)!
-    const n = this.cantidad(e.id)
+    const n = this.compradas(e.id)
     let recurso = this.estado.recurso
     let k = 0
     while (k < 1000) {
@@ -186,7 +204,7 @@ export class Incremental {
 
   mejoraDesbloqueada(m: Mejora): boolean {
     const c = m.condicion
-    if (c.tipo === 'edificio') return this.cantidad(c.id) >= c.cantidad
+    if (c.tipo === 'edificio') return this.compradas(c.id) >= c.cantidad
     if (c.tipo === 'clicks') return this.estado.clicks >= c.cantidad
     return this.estado.total >= c.cantidad
   }
@@ -226,6 +244,14 @@ export class Incremental {
   }
 
   tick(dt: number) {
+    if (this.hayCadenas) {
+      // Primero se calcula lo que genera cada eslabón y luego se aplica, para no encadenar dentro del mismo paso.
+      const generado: [string, number][] = []
+      for (const e of this.config.edificios) if (e.genera) generado.push([e.genera, this.produccionEdificio(e.id) * dt])
+      this.sumar(this.produccionTotal() * dt)
+      for (const [id, n] of generado) if (n > 0) this.estado.edificios[id] = this.cantidad(id) + n
+      return
+    }
     this.sumar(this.produccionTotal() * dt)
   }
 
@@ -234,7 +260,9 @@ export class Incremental {
     const coste = this.costeEdificio(idEdificio, cantidad)
     if (cantidad <= 0 || this.estado.recurso < coste) return false
     this.estado.recurso -= coste
+    const previas = this.compradas(idEdificio)
     this.estado.edificios[idEdificio] = this.cantidad(idEdificio) + cantidad
+    this.estado.comprados = { ...this.estado.comprados, [idEdificio]: previas + cantidad }
     return true
   }
 
@@ -262,6 +290,13 @@ export class Incremental {
   /** Abona producción del tiempo fuera. Devuelve lo ganado y los segundos abonados. */
   progresoOffline(segundos: number): { recurso: number; segundos: number } {
     const s = Math.min(segundos, this.config.maxOfflineSeg)
+    if (this.hayCadenas) {
+      // La producción crece con el tiempo: se simula en pasos.
+      const antes = this.estado.recurso
+      const pasos = Math.min(2000, Math.max(1, Math.ceil(s)))
+      for (let i = 0; i < pasos; i++) this.tick(s / pasos)
+      return { recurso: this.estado.recurso - antes, segundos: s }
+    }
     const ganado = this.produccionTotal() * s
     if (ganado > 0) this.sumar(ganado)
     return { recurso: ganado, segundos: s }
@@ -278,8 +313,13 @@ export class Incremental {
     const g = cargar<Estado>(config.claveGuardado, config.versionGuardado)
     const vacio = new Incremental(config)
     if (!g) return { juego: vacio, offline: null }
-    // Rellena campos que puedan faltar en guardados antiguos.
-    const estado: Estado = { ...vacio.estadoInicial(), ...g.data, edificios: { ...vacio.estadoInicial().edificios, ...g.data.edificios } }
+    // Rellena campos que puedan faltar en guardados antiguos. Sin cadenas, todo lo que hay se compró.
+    const estado: Estado = {
+      ...vacio.estadoInicial(),
+      ...g.data,
+      edificios: { ...vacio.estadoInicial().edificios, ...g.data.edificios },
+      comprados: g.data.comprados ?? { ...g.data.edificios },
+    }
     const juego = new Incremental(config, estado)
     const offline = g.elapsedSec > 5 ? juego.progresoOffline(g.elapsedSec) : null
     return { juego, offline }
