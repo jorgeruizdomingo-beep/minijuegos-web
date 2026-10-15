@@ -86,8 +86,10 @@ export type Config = {
   mejoras: Mejora[]
   crecimientoCoste: number // multiplicador de coste por unidad comprada (p. ej. 1.15)
   prestigio: {
-    base: number // recurso histórico necesario para el primer punto; luego raíz cuadrada
+    base: number // recurso histórico necesario para el primer punto; luego raíz
     bonus: number // producción extra por punto (0.05 = +5%)
+    /** Índice de la raíz: puntos = ⌊(histórico/base)^(1/raiz)⌋. Por defecto 2 (raíz cuadrada); 3 frena el encadenado en partidas largas. */
+    raiz?: number
   }
   maxOfflineSeg: number
   /** Si existe, el motor gestiona el evento sorpresa (botón sobre la escena). */
@@ -370,7 +372,9 @@ export class Incremental {
 
   /** Puntos de prestigio totales que se tendrían al prestigiar ahora. */
   prestigioAlReiniciar(): number {
-    return Math.floor(Math.sqrt(this.estado.historico / this.config.prestigio.base))
+    const raiz = this.config.prestigio.raiz ?? 2
+    // Un pelín de holgura: (x^(1/3))^3 puede quedar en 7.9999 justo en el umbral.
+    return Math.floor(Math.pow(this.estado.historico / this.config.prestigio.base, 1 / raiz) + 1e-9)
   }
 
   prestigioGanable(): number {
@@ -380,7 +384,7 @@ export class Incremental {
   /** Recurso histórico necesario para el siguiente punto de prestigio. */
   historicoParaSiguientePrestigio(): number {
     const siguiente = this.prestigioAlReiniciar() + 1
-    return siguiente * siguiente * this.config.prestigio.base
+    return siguiente ** (this.config.prestigio.raiz ?? 2) * this.config.prestigio.base
   }
 
   // ---------- Acciones ----------
