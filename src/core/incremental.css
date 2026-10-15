@@ -1,5 +1,15 @@
-.topbar__actions { display: flex; gap: 6px; }
+.topbar__actions { display: flex; gap: 6px; flex-shrink: 0; }
 .topbar__actions button { padding: 6px 10px; }
+.topbar__titulo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* En móvil la cabecera lleva cinco botones: se compacta y el título del juego pasa a la marca. */
+@media (max-width: 560px) {
+  .topbar { padding: 8px 10px; gap: 8px; }
+  .topbar .brand { font-size: 0; }
+  .topbar .brand::before { content: '🎮'; font-size: 18px; }
+  .topbar__actions { gap: 4px; }
+  .topbar__actions button { padding: 6px 7px; font-size: 14px; border-radius: 8px; }
+}
 
 .juego {
   display: grid;

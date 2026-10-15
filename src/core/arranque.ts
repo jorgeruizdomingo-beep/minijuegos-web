@@ -19,8 +19,12 @@ export type Escena = {
   frame(dt: number): void
 }
 
+const MAX_TOASTS = 4
+
 export function toast(texto: string, ms = 4000, clase = '') {
   const toasts = document.getElementById('toasts')!
+  // Si se acumulan, los más antiguos se van antes de tiempo para no tapar la escena.
+  while (toasts.children.length >= MAX_TOASTS) toasts.firstElementChild?.remove()
   const el = document.createElement('div')
   el.className = `toast ${clase}`
   el.textContent = texto
@@ -145,7 +149,13 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
       const nuevos = logros.comprobar()
       if (nuevos.length) {
         sonidos.logro()
-        for (const l of nuevos) toast(`${l.emoji} Logro: ${l.nombre}`, 4000, 'toast--logro')
+        // Varios a la vez (partida cargada, vuelta tras horas): un solo aviso en vez de una pila.
+        if (nuevos.length > 2) {
+          const nombres = nuevos.slice(0, 3).map((l) => l.nombre).join(', ')
+          const resto = nuevos.length - 3
+          toast(`🏆 ${nuevos.length} logros nuevos: ${nombres}${resto > 0 ? ` y ${resto} más` : ''}`, 6000, 'toast--logro')
+        }
+        else for (const l of nuevos) toast(`${l.emoji} Logro: ${l.nombre}`, 4000, 'toast--logro')
         refrescarBotonLogros()
       }
     }
