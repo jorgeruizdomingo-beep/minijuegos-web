@@ -48,7 +48,7 @@ export function htmlArbol(j: Incremental): string {
     if (!filas.has(v)) filas.set(v, [])
     filas.get(v)!.push(n)
   }
-  const comprados = j.nodosComprados().length
+  const comprados = arbol.nodos.filter((n) => j.tieneNodo(n.id)).length
   const cab = `<p class="muted arbol__cab">
       <span><strong>${arbol.fichaEmoji} ${j.fichas}</strong> ${j.fichas === 1 ? arbol.fichaNombre : arbol.fichaPlural} sin gastar · ${comprados} de ${arbol.nodos.length} nodos</span>
       <span>Las fichas se ganan al reiniciar y lo comprado aquí no se pierde nunca.</span>
@@ -59,21 +59,26 @@ export function htmlArbol(j: Incremental): string {
       const nodos = filas
         .get(v)!
         .map((n) => {
-          const tiene = j.tieneNodo(n.id)
+          const nivel = j.nivelNodo(n.id)
+          const maximo = j.maximoNodo(n.id)
+          const tiene = nivel > 0
+          const completo = nivel >= maximo
           const disponible = j.nodoDisponible(n.id)
-          const puede = disponible && j.fichas >= n.coste
+          const coste = j.costeNodo(n.id)
+          const puede = disponible && j.fichas >= coste
           const requisitos = (n.requiere ?? []).map((r) => porId.get(r)?.nombre ?? r)
-          const estado = tiene ? 'nodo--ok' : disponible ? 'nodo--libre' : 'nodo--bloqueado'
+          const estado = completo ? 'nodo--ok' : disponible ? 'nodo--libre' : tiene ? 'nodo--libre' : 'nodo--bloqueado'
+          const nivelTexto = n.repetible ? `<span class="nodo__nivel mono">nivel ${nivel}/${maximo === Infinity ? '∞' : maximo}</span>` : ''
           return `
-            <button class="nodo ${estado}" data-nodo="${n.id}" ${tiene || !puede ? 'disabled' : ''} title="${n.descripcion}">
-              <span class="nodo__emoji">${tiene ? n.emoji : disponible ? n.emoji : '🔒'}</span>
+            <button class="nodo ${estado}" data-nodo="${n.id}" ${completo || !puede ? 'disabled' : ''} title="${n.descripcion}">
+              <span class="nodo__emoji">${tiene || disponible ? n.emoji : '🔒'}</span>
               <span class="nodo__info">
-                <strong>${n.nombre}</strong>
+                <strong>${n.nombre}${nivelTexto ? ` ${nivelTexto}` : ''}</strong>
                 <span class="muted">${n.descripcion}</span>
-                <span class="nodo__efecto">${describirEfecto(n.efecto, j)}</span>
+                <span class="nodo__efecto">${describirEfecto(n.efecto, j)}${n.repetible ? ' por nivel' : ''}</span>
                 ${!tiene && !disponible && requisitos.length ? `<span class="muted">Requiere: ${requisitos.join(', ')}</span>` : ''}
               </span>
-              <span class="nodo__coste mono">${tiene ? '✓' : `${n.coste} ${arbol.fichaEmoji}`}</span>
+              <span class="nodo__coste mono">${completo ? '✓' : `${coste} ${arbol.fichaEmoji}`}</span>
             </button>`
         })
         .join('')

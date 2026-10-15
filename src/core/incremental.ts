@@ -64,9 +64,11 @@ export type NodoArbol = {
   nombre: string
   descripcion: string
   emoji: string
-  coste: number // fichas
-  requiere?: string[] // nodos que deben estar comprados
-  efecto: EfectoNodo
+  coste: number // fichas (del primer nivel, si es repetible)
+  requiere?: string[] // nodos que deben estar comprados (al menos un nivel)
+  efecto: EfectoNodo // en un nodo repetible se acumula por nivel (× para global/click, + para el resto)
+  /** Si existe, el nodo se puede comprar varias veces: coste × crecimientoCoste por nivel, hasta `maximo` (sin tope si falta). */
+  repetible?: { maximo?: number; crecimientoCoste: number }
 }
 
 /** Árbol de mejoras permanentes que se compra con fichas ganadas al prestigiar. */
@@ -182,7 +184,29 @@ export class Incremental {
   }
 
   tieneNodo(id: string): boolean {
-    return this.nodosComprados().includes(id)
+    return this.nivelNodo(id) > 0
+  }
+
+  /** Veces que se ha comprado un nodo (0 o 1 si no es repetible). */
+  nivelNodo(id: string): number {
+    let n = 0
+    for (const x of this.nodosComprados()) if (x === id) n++
+    return n
+  }
+
+  /** Coste del siguiente nivel de un nodo (el primero si aún no se tiene). */
+  costeNodo(id: string): number {
+    const n = this.nodo(id)
+    if (!n) return Infinity
+    const nivel = this.nivelNodo(id)
+    return n.repetible ? Math.ceil(n.coste * n.repetible.crecimientoCoste ** nivel) : n.coste
+  }
+
+  /** Nivel máximo de un nodo (1 si no es repetible, Infinity si es repetible sin tope). */
+  maximoNodo(id: string): number {
+    const n = this.nodo(id)
+    if (!n) return 0
+    return n.repetible ? (n.repetible.maximo ?? Infinity) : 1
   }
 
   /** Verdadero si algún nodo comprado desbloquea esta clave (evolución de escena, contenido). */
@@ -195,28 +219,36 @@ export class Incremental {
     return this.efectosNodos().flatMap((e) => (e.tipo === 'desbloqueo' ? [e.clave] : []))
   }
 
+  /** Efectos activos, repetidos tantas veces como niveles tenga cada nodo (un desbloqueo cuenta una vez). */
   private efectosNodos(): EfectoNodo[] {
     const arbol = this.config.arbol
     if (!arbol) return []
-    const comprados = new Set(this.nodosComprados())
-    return arbol.nodos.filter((n) => comprados.has(n.id)).map((n) => n.efecto)
+    const efectos: EfectoNodo[] = []
+    for (const n of arbol.nodos) {
+      const nivel = this.nivelNodo(n.id)
+      if (nivel <= 0) continue
+      const veces = n.efecto.tipo === 'desbloqueo' ? 1 : nivel
+      for (let i = 0; i < veces; i++) efectos.push(n.efecto)
+    }
+    return efectos
   }
 
   nodo(id: string): NodoArbol | undefined {
     return this.config.arbol?.nodos.find((n) => n.id === id)
   }
 
-  /** Requisitos cumplidos y aún sin comprar (no mira las fichas). */
+  /** Requisitos cumplidos y con niveles por comprar (no mira las fichas). */
   nodoDisponible(id: string): boolean {
     const n = this.nodo(id)
-    if (!n || this.tieneNodo(id)) return false
+    if (!n || this.nivelNodo(id) >= this.maximoNodo(id)) return false
     return (n.requiere ?? []).every((r) => this.tieneNodo(r))
   }
 
   comprarNodo(id: string): boolean {
     const n = this.nodo(id)
-    if (!n || !this.nodoDisponible(id) || this.fichas < n.coste) return false
-    this.estado.fichas = this.fichas - n.coste
+    const coste = this.costeNodo(id)
+    if (!n || !this.nodoDisponible(id) || this.fichas < coste) return false
+    this.estado.fichas = this.fichas - coste
     this.estado.nodos = [...this.nodosComprados(), id]
     // Un nodo de arranque comprado a mitad de vida regala las unidades que faltan ya mismo.
     if (n.efecto.tipo === 'arranque') this.aplicarArranque()
@@ -258,10 +290,12 @@ export class Incremental {
 
   /** Regala las unidades de arranque que falten (sin contar como compradas, para no encarecer). */
   private aplicarArranque() {
+    const objetivo: Record<string, number> = {}
     for (const e of this.efectosNodos()) {
       if (e.tipo !== 'arranque' || !this.edificiosPorId.has(e.edificio)) continue
-      if (this.cantidad(e.edificio) < e.cantidad) this.estado.edificios[e.edificio] = e.cantidad
+      objetivo[e.edificio] = (objetivo[e.edificio] ?? 0) + e.cantidad
     }
+    for (const [id, n] of Object.entries(objetivo)) if (this.cantidad(id) < n) this.estado.edificios[id] = n
   }
 
   // ---------- Consultas ----------
