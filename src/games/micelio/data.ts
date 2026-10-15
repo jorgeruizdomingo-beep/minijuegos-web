@@ -23,6 +23,13 @@ const MEJORAS: Mejora[] = [
   { id: 'global_2', nombre: 'Hojarasca rica', descripcion: 'Toda la producción +15%.', emoji: '🍂', coste: 5_000_000, condicion: { tipo: 'total', cantidad: 2_000_000 }, efecto: { tipo: 'global', mult: 1.15 } },
   { id: 'global_3', nombre: 'Simbiosis', descripcion: 'Toda la producción +20%.', emoji: '🤝', coste: 2_000_000_000, condicion: { tipo: 'total', cantidad: 1_000_000_000 }, efecto: { tipo: 'global', mult: 1.2 } },
   { id: 'global_4', nombre: 'Mente fúngica', descripcion: 'Toda la producción +25%.', emoji: '🧠', coste: 1e12, condicion: { tipo: 'total', cantidad: 5e11 }, efecto: { tipo: 'global', mult: 1.25 } },
+  { id: 'global_5', nombre: 'Bosque viejo', descripcion: 'Toda la producción +30%.', emoji: '🌲', coste: 1e15, condicion: { tipo: 'total', cantidad: 5e14 }, efecto: { tipo: 'global', mult: 1.3 } },
+  { id: 'global_6', nombre: 'Gaia', descripcion: 'Toda la producción +50%.', emoji: '🌍', coste: 1e18, condicion: { tipo: 'total', cantidad: 5e17 }, efecto: { tipo: 'global', mult: 1.5 } },
+
+  // Lluvia (el efecto lo aplica la escena leyendo tieneMejora; el multiplicador 1 es neutro)
+  { id: 'lluvia_1', nombre: 'Nubes bajas', descripcion: 'La nube espera 40 s antes de irse.', emoji: '☁️', coste: 2_000_000, condicion: { tipo: 'total', cantidad: 500_000 }, efecto: { tipo: 'global', mult: 1 } },
+  { id: 'lluvia_2', nombre: 'Monzón', descripcion: 'La lluvia dura 60 s.', emoji: '🌧️', coste: 500_000_000, condicion: { tipo: 'total', cantidad: 100_000_000 }, efecto: { tipo: 'global', mult: 1 } },
+  { id: 'lluvia_3', nombre: 'Tormenta', descripcion: 'La lluvia multiplica x5.', emoji: '⛈️', coste: 2e11, condicion: { tipo: 'total', cantidad: 5e10 }, efecto: { tipo: 'global', mult: 1 } },
 
   // Por eslabón (x2 al comprar 1, 10 y 50)
   ...mejorasDeEdificio(EDIFICIOS[0], ['Paredes de quitina', 'Puntas absorbentes', 'Hifas gruesas']),
@@ -48,8 +55,11 @@ export const LLUVIA = {
   esperaMinSeg: 120,
   esperaMaxSeg: 240,
   visibleSeg: 20, // tiempo que la nube espera a que la pinches
+  visibleSegMejorada: 40, // con 'Nubes bajas'
   duracionSeg: 30,
+  duracionSegMejorada: 60, // con 'Monzón'
   mult: 3,
+  multMejorado: 5, // con 'Tormenta'
 }
 
 export const TEXTOS: Textos = {
