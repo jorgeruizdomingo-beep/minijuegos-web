@@ -49,6 +49,36 @@ export type EventoConfig = {
   mult: number
 }
 
+/** Efecto permanente de un nodo del árbol (sobrevive al prestigio). */
+export type EfectoNodo =
+  | { tipo: 'global'; mult: number } // producción ×mult
+  | { tipo: 'click'; mult: number } // recurso por clic ×mult
+  | { tipo: 'descuento'; porcentaje: number } // edificios más baratos (0.1 = -10 %)
+  | { tipo: 'arranque'; edificio: string; cantidad: number } // cada vida empieza con N unidades
+  | { tipo: 'offline'; horas: number } // más horas de progreso fuera
+  | { tipo: 'fichas'; porcentaje: number } // más fichas por reinicio (0.25 = +25 %)
+  | { tipo: 'desbloqueo'; clave: string } // clave libre que la escena o el juego leen con `tieneDesbloqueo`
+
+export type NodoArbol = {
+  id: string
+  nombre: string
+  descripcion: string
+  emoji: string
+  coste: number // fichas
+  requiere?: string[] // nodos que deben estar comprados
+  efecto: EfectoNodo
+}
+
+/** Árbol de mejoras permanentes que se compra con fichas ganadas al prestigiar. */
+export type ArbolConfig = {
+  fichaNombre: string // "ámbar"
+  fichaPlural: string // "ámbares"
+  fichaEmoji: string // "🟠"
+  /** Fichas que da un reinicio según los puntos de prestigio ganados en él. Por defecto, 1 + ⌊√ganados⌋. */
+  fichasPorReinicio?: (ganados: number, estado: Estado) => number
+  nodos: NodoArbol[]
+}
+
 export type Config = {
   claveGuardado: string
   versionGuardado: number
@@ -62,6 +92,8 @@ export type Config = {
   maxOfflineSeg: number
   /** Si existe, el motor gestiona el evento sorpresa (botón sobre la escena). */
   evento?: EventoConfig
+  /** Si existe, el motor gestiona las fichas y el árbol de mejoras permanentes. */
+  arbol?: ArbolConfig
 }
 
 export type Estado = {
@@ -76,6 +108,10 @@ export type Estado = {
   prestigio: number
   vidas: number // veces que se ha hecho prestigio
   inicio: number
+  /** Fichas del árbol sin gastar. Sobreviven al prestigio. */
+  fichas?: number
+  /** Nodos del árbol comprados. Sobreviven al prestigio. */
+  nodos?: string[]
 }
 
 /** Genera las tres mejoras estándar de un edificio (x2 al llegar a 1, 10 y 50). */
@@ -124,6 +160,105 @@ export class Incremental {
       prestigio: 0,
       vidas: 0,
       inicio: Date.now(),
+      fichas: 0,
+      nodos: [],
+    }
+  }
+
+  // ---------- Árbol de mejoras permanentes ----------
+
+  get arbol(): ArbolConfig | undefined {
+    return this.config.arbol
+  }
+
+  get fichas(): number {
+    return this.estado.fichas ?? 0
+  }
+
+  nodosComprados(): string[] {
+    return this.estado.nodos ?? []
+  }
+
+  tieneNodo(id: string): boolean {
+    return this.nodosComprados().includes(id)
+  }
+
+  /** Verdadero si algún nodo comprado desbloquea esta clave (evolución de escena, contenido). */
+  tieneDesbloqueo(clave: string): boolean {
+    return this.efectosNodos().some((e) => e.tipo === 'desbloqueo' && e.clave === clave)
+  }
+
+  /** Claves desbloqueadas por el árbol, para que la escena las lea de una vez. */
+  desbloqueos(): string[] {
+    return this.efectosNodos().flatMap((e) => (e.tipo === 'desbloqueo' ? [e.clave] : []))
+  }
+
+  private efectosNodos(): EfectoNodo[] {
+    const arbol = this.config.arbol
+    if (!arbol) return []
+    const comprados = new Set(this.nodosComprados())
+    return arbol.nodos.filter((n) => comprados.has(n.id)).map((n) => n.efecto)
+  }
+
+  nodo(id: string): NodoArbol | undefined {
+    return this.config.arbol?.nodos.find((n) => n.id === id)
+  }
+
+  /** Requisitos cumplidos y aún sin comprar (no mira las fichas). */
+  nodoDisponible(id: string): boolean {
+    const n = this.nodo(id)
+    if (!n || this.tieneNodo(id)) return false
+    return (n.requiere ?? []).every((r) => this.tieneNodo(r))
+  }
+
+  comprarNodo(id: string): boolean {
+    const n = this.nodo(id)
+    if (!n || !this.nodoDisponible(id) || this.fichas < n.coste) return false
+    this.estado.fichas = this.fichas - n.coste
+    this.estado.nodos = [...this.nodosComprados(), id]
+    // Un nodo de arranque comprado a mitad de vida regala las unidades que faltan ya mismo.
+    if (n.efecto.tipo === 'arranque') this.aplicarArranque()
+    return true
+  }
+
+  /** Fichas que daría prestigiar ahora. */
+  fichasAlReiniciar(): number {
+    return this.fichasPor(this.prestigioGanable())
+  }
+
+  private fichasPor(ganados: number): number {
+    const arbol = this.config.arbol
+    if (!arbol || ganados <= 0) return 0
+    const base = arbol.fichasPorReinicio ? arbol.fichasPorReinicio(ganados, this.estado) : 1 + Math.floor(Math.sqrt(ganados))
+    let extra = 0
+    for (const e of this.efectosNodos()) if (e.tipo === 'fichas') extra += e.porcentaje
+    return Math.max(0, Math.round(base * (1 + extra)))
+  }
+
+  private descuentoEdificios(): number {
+    let d = 0
+    for (const e of this.efectosNodos()) if (e.tipo === 'descuento') d += e.porcentaje
+    return Math.min(0.75, d)
+  }
+
+  private multiplicadorNodos(tipo: 'global' | 'click'): number {
+    let m = 1
+    for (const e of this.efectosNodos()) if (e.tipo === tipo) m *= e.mult
+    return m
+  }
+
+  /** Segundos máximos de progreso fuera, con las horas extra del árbol. */
+  maxOfflineSeg(): number {
+    let horas = 0
+    for (const e of this.efectosNodos()) if (e.tipo === 'offline') horas += e.horas
+    return this.config.maxOfflineSeg + horas * 3600
+  }
+
+  /** Regala las unidades de arranque que falten (sin contar como compradas, para no encarecer). */
+  private aplicarArranque() {
+    for (const e of this.efectosNodos()) {
+      if (e.tipo !== 'arranque' || !this.edificiosPorId.has(e.edificio)) continue
+      if (this.cantidad(e.edificio) < e.cantidad) this.estado.edificios[e.edificio] = e.cantidad
     }
   }
 
@@ -134,7 +269,7 @@ export class Incremental {
   }
 
   multiplicadorGlobal(): number {
-    let m = (1 + this.estado.prestigio * this.config.prestigio.bonus) * (1 + this.bonusLogros) * this.multiplicadorTemporal
+    let m = (1 + this.estado.prestigio * this.config.prestigio.bonus) * (1 + this.bonusLogros) * this.multiplicadorTemporal * this.multiplicadorNodos('global')
     for (const id of this.estado.mejoras) {
       const mej = this.mejorasPorId.get(id)
       if (mej?.efecto.tipo === 'global') m *= mej.efecto.mult
@@ -183,7 +318,7 @@ export class Incremental {
   }
 
   recursoPorClick(): number {
-    let base = 1
+    let base = this.multiplicadorNodos('click')
     let porcentaje = 0
     for (const id of this.estado.mejoras) {
       const mej = this.mejorasPorId.get(id)
@@ -194,11 +329,16 @@ export class Incremental {
     return base * this.multiplicadorGlobal() + this.produccionTotal() * porcentaje
   }
 
+  /** Coste de la unidad número `n` (empezando en 0) de un edificio, con el descuento del árbol. */
+  private costeUnidad(e: Edificio, n: number): number {
+    return Math.ceil(e.costeBase * this.config.crecimientoCoste ** n * (1 - this.descuentoEdificios()))
+  }
+
   costeEdificio(idEdificio: string, cantidad = 1): number {
     const e = this.edificiosPorId.get(idEdificio)!
     const n = this.compradas(e.id)
     let total = 0
-    for (let i = 0; i < cantidad; i++) total += Math.ceil(e.costeBase * this.config.crecimientoCoste ** (n + i))
+    for (let i = 0; i < cantidad; i++) total += this.costeUnidad(e, n + i)
     return total
   }
 
@@ -209,7 +349,7 @@ export class Incremental {
     let recurso = this.estado.recurso
     let k = 0
     while (k < 1000) {
-      const c = Math.ceil(e.costeBase * this.config.crecimientoCoste ** (n + k))
+      const c = this.costeUnidad(e, n + k)
       if (recurso < c) break
       recurso -= c
       k++
@@ -298,13 +438,16 @@ export class Incremental {
     nuevo.prestigio = e.prestigio + ganados
     nuevo.vidas = e.vidas + 1
     nuevo.inicio = e.inicio
+    nuevo.fichas = (e.fichas ?? 0) + this.fichasPor(ganados)
+    nuevo.nodos = [...(e.nodos ?? [])]
     this.estado = nuevo
+    this.aplicarArranque()
     return true
   }
 
   /** Abona producción del tiempo fuera. Devuelve lo ganado y los segundos abonados. */
   progresoOffline(segundos: number): { recurso: number; segundos: number } {
-    const s = Math.min(segundos, this.config.maxOfflineSeg)
+    const s = Math.min(segundos, this.maxOfflineSeg())
     if (this.hayCadenas) {
       // La producción crece con el tiempo: se simula en pasos.
       const antes = this.estado.recurso
@@ -339,6 +482,12 @@ export class Incremental {
       comprados: g.data.comprados ?? { ...g.data.edificios },
     }
     const juego = new Incremental(config, estado)
+    // Partidas anteriores al árbol: se abonan las fichas que habrían dado sus reinicios.
+    if (config.arbol && g.data.nodos === undefined) {
+      estado.nodos = []
+      estado.fichas = (g.data.fichas ?? 0) + (estado.prestigio > 0 ? juego.fichasPor(estado.prestigio) : 0)
+    }
+    juego.aplicarArranque() // nodos de arranque comprados en otra sesión o dispositivo
     preparar?.(juego) // p. ej. fijar bonus por logros antes de abonar el tiempo fuera
     const offline = g.elapsedSec > 5 ? juego.progresoOffline(g.elapsedSec) : null
     return { juego, offline }

@@ -38,6 +38,7 @@ export class EscenaHormiguero implements Escena {
   private tiempo = 0
   private impacto = 0 // 1 justo tras un clic, decae a 0 (aplasta la miga)
   private impulso = 0 // 1 justo tras un clic, decae: las hormigas aprietan el paso
+  private estandarte = false // nodo del árbol permanente: banderín en el nido
   private canvas: HTMLCanvasElement
 
   constructor(canvas: HTMLCanvasElement, juego: Incremental) {
@@ -68,6 +69,11 @@ export class EscenaHormiguero implements Escena {
 
   private n(id: string) {
     return this.juego.cantidad(id)
+  }
+
+  /** El motor avisa de compras, nodos y prestigio: la escena relee lo desbloqueado. */
+  cambio() {
+    this.estandarte = this.juego.tieneDesbloqueo('estandarte')
   }
 
   /** Ajusta la población visible al tamaño de la colonia. */
@@ -394,6 +400,23 @@ export class EscenaHormiguero implements Escena {
     ctx.beginPath()
     ctx.ellipse(cx, cy - 4 * escala, 20, 9, 0, 0, Math.PI * 2)
     ctx.fill()
+
+    // Estandarte (árbol permanente): mástil con banderín ondeando junto a la entrada.
+    if (this.estandarte) {
+      const bx = cx + 30 * escala
+      const by = cy - 2 * escala
+      ctx.strokeStyle = '#d8c8a8'
+      ctx.lineWidth = 2
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by - 34); ctx.stroke()
+      const onda = Math.sin(this.tiempo * 4) * 3
+      ctx.fillStyle = '#ff7a59'
+      ctx.beginPath()
+      ctx.moveTo(bx, by - 34)
+      ctx.lineTo(bx + 18, by - 30 + onda)
+      ctx.lineTo(bx, by - 24)
+      ctx.closePath()
+      ctx.fill()
+    }
 
     // Reina secundaria: una corona corona el nido.
     if (this.n('reina') > 0) {

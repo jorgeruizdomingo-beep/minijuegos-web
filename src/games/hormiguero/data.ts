@@ -145,6 +145,21 @@ export const CONFIG: Config = {
   maxOfflineSeg: 8 * 3600,
   // Miga dorada: cada 2-4 minutos aparece sobre la escena; si la pinchas, x7 durante 30 s.
   evento: { nombre: 'Miga dorada', emoji: '🍪', esperaMinSeg: 120, esperaMaxSeg: 240, visibleSeg: 12, duracionSeg: 30, mult: 7 },
+  // Árbol permanente de ejemplo (el definitivo lo diseña el hilo de Hormiguero).
+  // Las fichas son ámbar: cada fundación de colonia da 1 + ⌊√feromonas ganadas⌋.
+  arbol: {
+    fichaNombre: 'ámbar',
+    fichaPlural: 'ámbares',
+    fichaEmoji: '🟠',
+    nodos: [
+      { id: 'memoria', nombre: 'Memoria de la colonia', descripcion: 'Las nuevas reinas recuerdan dónde estaba la mesa.', emoji: '🧠', coste: 1, efecto: { tipo: 'global', mult: 1.25 } },
+      { id: 'huevos', nombre: 'Huevos de reserva', descripcion: 'Cada colonia nace con cinco obreras ya criadas.', emoji: '🥚', coste: 2, requiere: ['memoria'], efecto: { tipo: 'arranque', edificio: 'obrera', cantidad: 5 } },
+      { id: 'regateo', nombre: 'Regateo con pulgones', descripcion: 'Todo lo que compras sale un 10 % más barato.', emoji: '🤝', coste: 2, requiere: ['memoria'], efecto: { tipo: 'descuento', porcentaje: 0.1 } },
+      { id: 'estandarte', nombre: 'Estandarte', descripcion: 'La colonia iza un estandarte en el nido. Visible en el mapa.', emoji: '🚩', coste: 3, requiere: ['huevos'], efecto: { tipo: 'desbloqueo', clave: 'estandarte' } },
+      { id: 'sueno', nombre: 'Sueño ligero', descripcion: 'La colonia sigue trabajando cuatro horas más mientras no miras.', emoji: '🌙', coste: 3, requiere: ['regateo'], efecto: { tipo: 'offline', horas: 4 } },
+      { id: 'abundancia', nombre: 'Abundancia', descripcion: 'Cada fundación deja un 50 % más de ámbar.', emoji: '💎', coste: 4, requiere: ['estandarte', 'sueno'], efecto: { tipo: 'fichas', porcentaje: 0.5 } },
+    ],
+  },
 }
 
 export const TEXTOS: Textos = {
