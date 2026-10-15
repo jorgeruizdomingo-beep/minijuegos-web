@@ -61,7 +61,7 @@ export const CONFIG: Config = {
       { id: 'temporal', nombre: 'Temporal', descripcion: 'La lluvia dura el doble.', emoji: '🌊', coste: 4, requiere: ['rocio'], efecto: { tipo: 'desbloqueo', clave: 'lluvia_doble' } },
       // Rama letargo
       { id: 'letargo', nombre: 'Letargo', descripcion: 'El bosque sigue creciendo cuatro horas más mientras no miras.', emoji: '🌙', coste: 2, requiere: ['memoria'], efecto: { tipo: 'offline', horas: 4 } },
-      { id: 'hibernacion', nombre: 'Hibernación', descripcion: 'Ocho horas más de crecimiento mientras no miras.', emoji: '❄️', coste: 4, requiere: ['letargo'], efecto: { tipo: 'offline', horas: 8 } },
+      { id: 'hibernacion', nombre: 'Hibernación', descripcion: 'Ocho horas más de crecimiento mientras no miras, por nivel.', emoji: '❄️', coste: 4, requiere: ['letargo'], efecto: { tipo: 'offline', horas: 8 }, repetible: { maximo: 3, crecimientoCoste: 2 } },
       { id: 'cosecha', nombre: 'Cosecha de trufas', descripcion: 'Cada bosque nuevo deja un 50 % más de trufas.', emoji: '🧺', coste: 5, requiere: ['hibernacion'], efecto: { tipo: 'fichas', porcentaje: 0.5 } },
       // Rama crecimiento
       { id: 'viajeras', nombre: 'Esporas viajeras', descripcion: 'Cada bosque nace con diez hifas ya tejidas.', emoji: '🍃', coste: 2, requiere: ['memoria'], efecto: { tipo: 'arranque', edificio: 'hifa', cantidad: 10 } },
@@ -71,11 +71,11 @@ export const CONFIG: Config = {
       { id: 'luz', nombre: 'Bioluminiscencia', descripcion: 'La red brilla en la oscuridad y los pulsos se ven desde lejos. Visible en el mapa.', emoji: '✨', coste: 2, requiere: ['memoria'], efecto: { tipo: 'desbloqueo', clave: 'luz' } },
       { id: 'flores', nombre: 'Claro de flores', descripcion: 'Brotan flores entre las setas. Visible en el mapa.', emoji: '🌸', coste: 3, requiere: ['luz'], efecto: { tipo: 'desbloqueo', clave: 'flores' } },
       { id: 'arbol_madre', nombre: 'Árbol madre', descripcion: 'Un árbol enorme preside el bosque: toda la producción +50 %. Visible en el mapa.', emoji: '🌳', coste: 6, requiere: ['semillero', 'flores'], efecto: { tipo: 'global', mult: 1.5 } },
-      // Tramo tardío: nodos caros para que las trufas sigan teniendo destino tras muchos bosques.
-      { id: 'raices_profundas', nombre: 'Raíces profundas', descripcion: 'Toda la producción x2.', emoji: '🪵', coste: 12, requiere: ['arbol_madre', 'temporal'], efecto: { tipo: 'global', mult: 2 } },
-      { id: 'red_mundial', nombre: 'Red mundial', descripcion: 'Toda la producción x2.', emoji: '🌐', coste: 25, requiere: ['raices_profundas', 'cosecha'], efecto: { tipo: 'global', mult: 2 } },
-      { id: 'cosecha_doble', nombre: 'Trufas negras', descripcion: 'Cada bosque nuevo deja el doble de trufas.', emoji: '⚫', coste: 40, requiere: ['red_mundial'], efecto: { tipo: 'fichas', porcentaje: 1 } },
-      { id: 'eternidad', nombre: 'Eternidad', descripcion: 'El bosque ya no olvida nada: toda la producción x3.', emoji: '♾️', coste: 80, requiere: ['cosecha_doble'], efecto: { tipo: 'global', mult: 3 } },
+      // Tramo tardío: nodos repetibles para que las trufas siempre tengan destino.
+      { id: 'raices_profundas', nombre: 'Raíces profundas', descripcion: 'Toda la producción x2 por nivel.', emoji: '🪵', coste: 12, requiere: ['arbol_madre', 'temporal'], efecto: { tipo: 'global', mult: 2 }, repetible: { maximo: 8, crecimientoCoste: 2 } },
+      { id: 'red_mundial', nombre: 'Red mundial', descripcion: 'Todo lo que compras sale un 5 % más barato por nivel.', emoji: '🌐', coste: 10, requiere: ['raices_profundas'], efecto: { tipo: 'descuento', porcentaje: 0.05 }, repetible: { maximo: 12, crecimientoCoste: 1.5 } },
+      { id: 'cosecha_doble', nombre: 'Trufas negras', descripcion: 'Cada bosque nuevo deja un 25 % más de trufas por nivel.', emoji: '⚫', coste: 20, requiere: ['raices_profundas', 'cosecha'], efecto: { tipo: 'fichas', porcentaje: 0.25 }, repetible: { crecimientoCoste: 1.6 } },
+      { id: 'eternidad', nombre: 'Eternidad', descripcion: 'El bosque ya no olvida nada: toda la producción x3 por nivel.', emoji: '♾️', coste: 80, requiere: ['cosecha_doble'], efecto: { tipo: 'global', mult: 3 }, repetible: { maximo: 5, crecimientoCoste: 3 } },
     ],
   },
 }
