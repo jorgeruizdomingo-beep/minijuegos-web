@@ -21,7 +21,7 @@ type Exploradora = { x: number; y: number; ang: number; giro: number; v: number;
 
 type Particula = { x: number; y: number; vx: number; vy: number; vida: number; r: number; color: string }
 
-const MAX_HORMIGAS = 140
+const MAX_HORMIGAS = 120
 const MAX_EXPLORADORAS = 8
 
 export class EscenaHormiguero implements Escena {
@@ -78,7 +78,7 @@ export class EscenaHormiguero implements Escena {
         t: Math.random(),
         v: 0.08 + Math.random() * 0.1,
         dir: Math.random() < 0.5 ? 1 : -1,
-        carril: (Math.random() - 0.5) * 36,
+        carril: (Math.random() - 0.5) * 50,
         carga: Math.random() < 0.5,
         hoja: false,
         fase: Math.random() * 40,
