@@ -1,17 +1,28 @@
 import { mejorasDeEdificio, type Config, type Edificio, type Mejora } from '../../core/incremental'
 import type { Textos } from '../../core/ui-incremental'
 
+// Amortización (coste/producción) que crece x1,5 por nivel a partir de la luna: así una sola partida, sin Supernovas,
+// recorre los 14 edificios en unas 18 h (jugador que ahorra para el siguiente edificio, simulado).
 const EDIFICIOS: Edificio[] = [
   { id: 'panel', nombre: 'Panel solar', descripcion: 'Una placa en órbita baja. Humilde, pero suma.', emoji: '🔆', costeBase: 15, produccion: 0.1 },
   { id: 'sonda', nombre: 'Sonda', descripcion: 'Explora y manda datos que valen energía.', emoji: '🛰️', costeBase: 100, produccion: 1 },
   { id: 'rele', nombre: 'Satélite de relé', descripcion: 'Concentra y retransmite la energía recogida.', emoji: '📡', costeBase: 1_100, produccion: 8 },
   { id: 'estacion', nombre: 'Estación orbital', descripcion: 'Tripulación permanente manteniendo la red.', emoji: '🏗️', costeBase: 12_000, produccion: 47 },
   { id: 'minero', nombre: 'Minero de asteroides', descripcion: 'Trae roca rica en isótopos.', emoji: '🪨', costeBase: 130_000, produccion: 260 },
-  { id: 'luna', nombre: 'Luna artificial', descripcion: 'Un reactor del tamaño de una luna.', emoji: '🌕', costeBase: 1_400_000, produccion: 1_400 },
-  { id: 'espejos', nombre: 'Anillo de espejos', descripcion: 'Refleja la luz de la estrella hacia tus colectores.', emoji: '💍', costeBase: 20_000_000, produccion: 7_800 },
-  { id: 'colector', nombre: 'Colector estelar', descripcion: 'Velas kilométricas que beben del viento solar.', emoji: '⛵', costeBase: 330_000_000, produccion: 44_000 },
-  { id: 'dyson', nombre: 'Segmento Dyson', descripcion: 'Un trozo de cáscara alrededor de la estrella.', emoji: '🌞', costeBase: 5_100_000_000, produccion: 260_000 },
+  { id: 'luna', nombre: 'Luna artificial', descripcion: 'Un reactor del tamaño de una luna.', emoji: '🌕', costeBase: 1_400_000, produccion: 1_750 },
+  { id: 'espejos', nombre: 'Anillo de espejos', descripcion: 'Refleja la luz de la estrella hacia tus colectores.', emoji: '💍', costeBase: 20_000_000, produccion: 16_700 },
+  { id: 'colector', nombre: 'Colector estelar', descripcion: 'Velas kilométricas que beben del viento solar.', emoji: '⛵', costeBase: 330_000_000, produccion: 183_000 },
+  // Estaciones completas: ya no son satélites, son ciudades.
+  { id: 'ciudad', nombre: 'Ciudad orbital', descripcion: 'Dos cilindros habitados girando en pareja. Miles de personas viven dentro.', emoji: '🏙️', costeBase: 5_100_000_000, produccion: 1_900_000 },
+  { id: 'ascensor', nombre: 'Ascensor espacial', descripcion: 'Un cable desde el ecuador hasta un contrapeso. Sube carga sin cohetes.', emoji: '🪜', costeBase: 80_000_000_000, produccion: 20_000_000 },
+  // Sistema solar: la vista se abre y las obras pasan a orbitar la estrella.
+  { id: 'colonia', nombre: 'Colonia en el planeta vecino', descripcion: 'Cúpulas y puertos orbitales en el mundo rojo de al lado.', emoji: '🔴', costeBase: 1_300_000_000_000, produccion: 220_000_000 },
+  { id: 'cinturon', nombre: 'Minas del cinturón', descripcion: 'Refinerías ancladas a los asteroides que rodean la estrella.', emoji: '🪨', costeBase: 20_000_000_000_000, produccion: 2_200_000_000 },
+  { id: 'puerto', nombre: 'Puerto del gigante gaseoso', descripcion: 'Estaciones que drenan helio-3 de la atmósfera del gigante.', emoji: '🪐', costeBase: 330_000_000_000_000, produccion: 24_000_000_000 },
+  { id: 'dyson', nombre: 'Segmento Dyson', descripcion: 'Un trozo de cáscara alrededor de la estrella.', emoji: '🌞', costeBase: 5_000_000_000_000_000, produccion: 250_000_000_000 },
 ]
+
+const porId = (id: string): Edificio => EDIFICIOS.find((e) => e.id === id)!
 
 const MEJORAS: Mejora[] = [
   // Clic (llamaradas)
@@ -31,15 +42,20 @@ const MEJORAS: Mejora[] = [
   { id: 'global_6', nombre: 'Motor estelar', descripcion: 'Toda la producción +50%.', emoji: '🚀', coste: 100_000_000_000_000, condicion: { tipo: 'total', cantidad: 50_000_000_000_000 }, efecto: { tipo: 'global', mult: 1.5 } },
 
   // Por edificio
-  ...mejorasDeEdificio(EDIFICIOS[0], ['Células de perovskita', 'Paneles plegables', 'Seguimiento solar']),
-  ...mejorasDeEdificio(EDIFICIOS[1], ['Sondas gemelas', 'Antenas de alta ganancia', 'Enjambre de sondas']),
-  ...mejorasDeEdificio(EDIFICIOS[2], ['Relé láser', 'Malla de relés', 'Relé cuántico']),
-  ...mejorasDeEdificio(EDIFICIOS[3], ['Módulo extra', 'Gravedad artificial', 'Astilleros orbitales']),
-  ...mejorasDeEdificio(EDIFICIOS[4], ['Taladros de plasma', 'Refinería orbital', 'Captura de cometas']),
-  ...mejorasDeEdificio(EDIFICIOS[5], ['Núcleo de torio', 'Corteza reflectante', 'Luna doble']),
-  ...mejorasDeEdificio(EDIFICIOS[6], ['Espejos adaptativos', 'Anillo cerrado', 'Foco estelar']),
-  ...mejorasDeEdificio(EDIFICIOS[7], ['Velas de grafeno', 'Velas en tándem', 'Flota de colectores']),
-  ...mejorasDeEdificio(EDIFICIOS[8], ['Segmentos enlazados', 'Media cáscara', 'Esfera completa']),
+  ...mejorasDeEdificio(porId('panel'), ['Células de perovskita', 'Paneles plegables', 'Seguimiento solar']),
+  ...mejorasDeEdificio(porId('sonda'), ['Sondas gemelas', 'Antenas de alta ganancia', 'Enjambre de sondas']),
+  ...mejorasDeEdificio(porId('rele'), ['Relé láser', 'Malla de relés', 'Relé cuántico']),
+  ...mejorasDeEdificio(porId('estacion'), ['Módulo extra', 'Gravedad artificial', 'Astilleros orbitales']),
+  ...mejorasDeEdificio(porId('minero'), ['Taladros de plasma', 'Refinería orbital', 'Captura de cometas']),
+  ...mejorasDeEdificio(porId('luna'), ['Núcleo de torio', 'Corteza reflectante', 'Luna doble']),
+  ...mejorasDeEdificio(porId('espejos'), ['Espejos adaptativos', 'Anillo cerrado', 'Foco estelar']),
+  ...mejorasDeEdificio(porId('colector'), ['Velas de grafeno', 'Velas en tándem', 'Flota de colectores']),
+  ...mejorasDeEdificio(porId('ciudad'), ['Agricultura interior', 'Astillero propio', 'Ciudades gemelas']),
+  ...mejorasDeEdificio(porId('ascensor'), ['Cable de nanotubos', 'Cabinas en tándem', 'Contrapeso minero']),
+  ...mejorasDeEdificio(porId('colonia'), ['Terraformación', 'Capital colonial', 'Lunas del vecino']),
+  ...mejorasDeEdificio(porId('cinturon'), ['Enjambre de refinerías', 'Catapultas de masa', 'Cinturón completo']),
+  ...mejorasDeEdificio(porId('puerto'), ['Globos de extracción', 'Anillo de puertos', 'Reactor de helio']),
+  ...mejorasDeEdificio(porId('dyson'), ['Segmentos enlazados', 'Media cáscara', 'Esfera completa']),
 
   // Fase tardía: con 100 y 200 unidades de un edificio, dos saltos más (x2 y x3).
   ...EDIFICIOS.flatMap((e) => mejorasTardias(e)),
@@ -59,9 +75,10 @@ export const CONFIG: Config = {
   edificios: EDIFICIOS,
   mejoras: MEJORAS,
   crecimientoCoste: 1.15,
-  // Raíz cúbica: frena el encadenado de Supernovas en partidas largas (10 núcleos a 5e7, 100 a 5e10, 1000 a 5e13).
-  // Base baja para que las partidas en curso no pierdan ritmo: hasta ~1e9 de histórico da igual o más que la raíz cuadrada anterior.
-  prestigio: { base: 50_000, bonus: 0.1, raiz: 3 },
+  // Ciclo largo: la primera Supernova que merece la pena (+10 núcleos, producción x2) llega con 3,7e15 de histórico,
+  // hacia las 15 h de juego, ya con el puerto del gigante gaseoso construido; la cáscara Dyson cae en el segundo ciclo.
+  // Raíz cúbica para que los ciclos siguientes no se encadenen: 30 núcleos a 1e17, 300 a 1e20, 1270 a las 72 h.
+  prestigio: { base: 3_700_000_000_000, bonus: 0.1, raiz: 3 },
   maxOfflineSeg: 8 * 3600,
   // Evento sorpresa del motor. Se llama "tormenta" y no "llamarada" para no confundirlo con el clic.
   evento: { nombre: 'Tormenta solar', emoji: '🌞', esperaMinSeg: 120, esperaMaxSeg: 240, visibleSeg: 12, duracionSeg: 30, mult: 7 },
@@ -119,7 +136,11 @@ export type Apariencia = {
   color: number
   velocidad: number // radianes por segundo
   inclinacion: number // radianes
-  forma: 'panel' | 'esfera' | 'cubo' | 'toro' | 'roca' | 'vela' | 'segmento'
+  forma: 'panel' | 'esfera' | 'cubo' | 'toro' | 'roca' | 'vela' | 'segmento' | 'ciudad' | 'ascensor' | 'colonia' | 'cinturon' | 'puerto'
+  /** Alrededor de qué orbita: el planeta (defecto), la estrella, el planeta vecino o el gigante gaseoso. */
+  centro?: 'planeta' | 'estrella' | 'vecino' | 'gigante'
+  /** Tope de unidades dibujadas si es menor que el general (los ascensores no pueden ser 28 cables). */
+  maxVisible?: number
 }
 
 export const APARIENCIAS: Record<string, Apariencia> = {
@@ -131,5 +152,11 @@ export const APARIENCIAS: Record<string, Apariencia> = {
   luna: { radio: 5.3, tamano: 0.2, color: 0xe8e4d8, velocidad: 0.25, inclinacion: 0.2, forma: 'esfera' },
   espejos: { radio: 6.1, tamano: 0.17, color: 0xc9f0ff, velocidad: 0.2, inclinacion: 0.95, forma: 'panel' },
   colector: { radio: 7.0, tamano: 0.24, color: 0xffa54f, velocidad: 0.15, inclinacion: -0.75, forma: 'vela' },
-  dyson: { radio: 2.4, tamano: 0.9, color: 0xff6b3d, velocidad: 0.12, inclinacion: 0.3, forma: 'segmento' },
+  ciudad: { radio: 8.2, tamano: 0.34, color: 0xc9d6ff, velocidad: 0.1, inclinacion: 0.35, forma: 'ciudad', maxVisible: 12 },
+  // Síncrono con la rotación del planeta (0,08 rad/s en render.ts): el cable no se enrolla.
+  ascensor: { radio: 2.9, tamano: 2.1, color: 0xdfe6f0, velocidad: -0.08, inclinacion: 0, forma: 'ascensor', maxVisible: 6 },
+  colonia: { radio: 1.5, tamano: 0.26, color: 0xff9a6a, velocidad: 0.4, inclinacion: 0.3, forma: 'colonia', centro: 'vecino' },
+  cinturon: { radio: 8.5, tamano: 0.3, color: 0xb8a088, velocidad: 0.04, inclinacion: 0.12, forma: 'cinturon', centro: 'estrella' },
+  puerto: { radio: 2.6, tamano: 0.3, color: 0xffd9a0, velocidad: 0.3, inclinacion: 0.25, forma: 'puerto', centro: 'gigante' },
+  dyson: { radio: 2.4, tamano: 0.9, color: 0xff6b3d, velocidad: 0.12, inclinacion: 0.3, forma: 'segmento', centro: 'estrella' },
 }

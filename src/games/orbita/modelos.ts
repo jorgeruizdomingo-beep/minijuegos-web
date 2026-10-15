@@ -204,7 +204,7 @@ const PINTORES: Record<Celda, Pintor> = {
     ctx.fillStyle = emisivo ? '#000' : '#2a1b14'
     ctx.fillRect(x, y, LADO, LADO)
     // Celosía hexagonal: oscura con bordes que brillan naranja (recogen la luz de la estrella).
-    ctx.strokeStyle = emisivo ? '#ff8c3a' : '#ff9a4a'
+    ctx.strokeStyle = emisivo ? '#9a4418' : '#e08a48'
     ctx.lineWidth = emisivo ? 3 : 4
     const r = 22
     const dx = r * Math.sqrt(3), dy = r * 1.5
@@ -553,6 +553,110 @@ export function modelo(id: string, detalle: Detalle, radioCascara = 2): THREE.Bu
       ])
     }
 
+    case 'ciudad': {
+      // Dos cilindros O'Neill en pareja, con sus espejos abiertos, un anillo agrícola y las cerchas que los unen.
+      const cilindro = (x: number) => pieza(new THREE.CylinderGeometry(0.24, 0.24, 1.7, d ? 14 : 9), 'ventanas', 0xffffff, (g) => g.translate(x, 0, 0))
+      const espejos = [-0.34, 0.34].flatMap((x) =>
+        [0, 1, 2].map((k) =>
+          pieza(new THREE.BoxGeometry(0.02, 1.3, 0.3), 'espejo', 0xffffff, (g) => {
+            g.rotateZ(x < 0 ? 0.55 : -0.55)
+            g.rotateY((Math.PI * 2 * k) / 3)
+            g.translate(x + Math.cos((Math.PI * 2 * k) / 3) * (x < 0 ? -0.34 : 0.34), 0.95, Math.sin((Math.PI * 2 * k) / 3) * 0.34)
+          }),
+        ),
+      )
+      return fusionar([
+        cilindro(-0.34),
+        cilindro(0.34),
+        ...espejos,
+        pieza(new THREE.TorusGeometry(0.42, 0.08, 6, d ? 28 : 16), 'celulas', 0x6f9fff, (g) => {
+          g.rotateX(Math.PI / 2)
+          g.translate(0, -0.98, 0)
+        }),
+        barra(0.04, 0.9, 'x', 'casco', 0x8a9099, 0, 0.6, 0),
+        barra(0.04, 0.9, 'x', 'casco', 0x8a9099, 0, -0.6, 0),
+        caja(0.3, 0.2, 0.3, 'radiador', 0xffffff, 0, -1.15, 0),
+        luz(0, 1.2, 0, 0.04),
+        luz(-0.34, -0.9, 0, 0.035),
+        luz(0.34, -0.9, 0, 0.035),
+      ])
+    }
+
+    case 'ascensor':
+      // Cable a lo largo de z (el +z apunta al planeta), ancla en la superficie, cabinas y contrapeso al final.
+      return fusionar([
+        barra(0.006, 1, 'z', 'casco', 0xe8ecf2, 0, 0, 0, 4),
+        caja(0.05, 0.02, 0.05, 'casco', 0xb0b6c0, 0, 0, 0.49),
+        caja(0.025, 0.025, 0.04, 'casco', 0xffcc55, 0, 0, 0.2),
+        caja(0.025, 0.025, 0.04, 'casco', 0xffcc55, 0, 0, -0.15),
+        pieza(new THREE.CylinderGeometry(0.06, 0.06, 0.08, 8), 'ventanas', 0xffffff, (g) => {
+          g.rotateX(Math.PI / 2)
+          g.translate(0, 0, -0.48)
+        }),
+        pieza(new THREE.TorusGeometry(0.09, 0.015, 5, 16), 'casco', 0x8a9099, (g) => g.translate(0, 0, -0.48)),
+        luz(0, 0, -0.55, 0.02),
+      ])
+
+    case 'colonia':
+      // Puerto orbital de la colonia: esfera habitada, anillo de atraque y alas.
+      return fusionar([
+        pieza(new THREE.SphereGeometry(0.3, d ? 16 : 10, d ? 12 : 8), 'ventanas', 0xffffff),
+        pieza(new THREE.TorusGeometry(0.5, 0.06, 6, d ? 28 : 16), 'casco', 0xd9b48a, (g) => g.rotateX(Math.PI / 2)),
+        ...[0, 1, 2, 3].map((k) => barra(0.03, 0.5, 'x', 'casco', 0x8a9099, 0, 0, 0, 4).rotateY((Math.PI / 2) * k).translate(Math.cos((Math.PI / 2) * k) * 0.25, 0, -Math.sin((Math.PI / 2) * k) * 0.25)),
+        ...alas(0.6, 0.3, 0.55, 0.0),
+        luz(0, 0.36, 0, 0.035),
+      ])
+
+    case 'cinturon': {
+      // Asteroide grande con refinería anclada: tanques, chimenea de radiadores y luces de trabajo.
+      const rnd = aleatorio(409)
+      const roca = pieza(new THREE.IcosahedronGeometry(0.55, d ? 2 : 1), 'roca', 0xa08a72, (g) => {
+        const p = g.getAttribute('position') as THREE.BufferAttribute
+        const v = new THREE.Vector3()
+        const empuje = new Map<string, number>()
+        for (let k = 0; k < p.count; k++) {
+          v.set(p.getX(k), p.getY(k), p.getZ(k))
+          const clave = v.toArray().map((n) => n.toFixed(3)).join(',')
+          let f = empuje.get(clave)
+          if (f === undefined) {
+            f = 0.78 + rnd() * 0.44
+            empuje.set(clave, f)
+          }
+          v.multiplyScalar(f)
+          p.setXYZ(k, v.x, v.y, v.z)
+        }
+        g.computeVertexNormals()
+        g.scale(1.3, 0.8, 1)
+      })
+      return fusionar([
+        roca,
+        pieza(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 8), 'oro', 0xe4b25a, (g) => g.translate(0.25, 0.55, 0)),
+        pieza(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 8), 'oro', 0xe4b25a, (g) => g.translate(-0.05, 0.55, 0.15)),
+        caja(0.5, 0.12, 0.3, 'casco', 0xc4c9d2, 0.1, 0.32, 0),
+        caja(0.08, 0.5, 0.35, 'radiador', 0xffffff, -0.35, 0.6, 0),
+        barra(0.02, 0.6, 'y', 'casco', 0xbfc4cc, 0.45, 0.6, 0, 4),
+        luz(0.45, 0.92, 0, 0.035),
+        luz(-0.4, 0.3, 0.3, 0.03),
+      ])
+    }
+
+    case 'puerto':
+      // Puerto atmosférico: columna habitada con los globos de extracción colgando y un anillo de atraque arriba.
+      return fusionar([
+        pieza(new THREE.CylinderGeometry(0.14, 0.14, 1.3, d ? 12 : 8), 'ventanas', 0xffffff),
+        pieza(new THREE.SphereGeometry(0.34, d ? 14 : 9, d ? 10 : 7), 'oro', 0xf0c070, (g) => g.translate(-0.3, -0.85, 0.1)),
+        pieza(new THREE.SphereGeometry(0.3, d ? 14 : 9, d ? 10 : 7), 'oro', 0xf0c070, (g) => g.translate(0.32, -0.8, -0.12)),
+        barra(0.02, 0.5, 'y', 'casco', 0x8a9099, -0.2, -0.5, 0.05, 4),
+        barra(0.02, 0.5, 'y', 'casco', 0x8a9099, 0.2, -0.45, -0.08, 4),
+        pieza(new THREE.TorusGeometry(0.45, 0.06, 6, d ? 28 : 16), 'casco', 0xc4c9d2, (g) => {
+          g.rotateX(Math.PI / 2)
+          g.translate(0, 0.55, 0)
+        }),
+        ...alas(0.55, 0.3, 0.2, 0.2),
+        caja(0.2, 0.25, 0.2, 'radiador', 0xffffff, 0, 0.78, 0),
+        luz(0, 0.95, 0, 0.04),
+      ])
+
     default:
       return fusionar([caja(0.6, 0.6, 0.6, 'casco', 0xffffff)])
   }
@@ -656,4 +760,99 @@ export function texturasPlaneta(semilla = 5): { mapa: THREE.Texture; luces: THRE
   const luces = new THREE.CanvasTexture(cl)
   luces.colorSpace = THREE.SRGBColorSpace
   return { mapa, luces }
+}
+
+/** Textura del planeta vecino: un mundo rojo y seco con casquetes de hielo y cañones oscuros. */
+export function texturaVecino(semilla = 21): THREE.Texture {
+  const w = 512, h = 256
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  const img = ctx.createImageData(w, h)
+  const relieve = ruido(semilla, 8, 4)
+  const detalle = ruido(semilla + 1, 32, 16)
+  for (let y = 0; y < h; y++) {
+    const lat = Math.abs(y / h - 0.5) * 2
+    for (let x = 0; x < w; x++) {
+      const e = relieve(x / w, y / h) * 0.6 + detalle(x / w, y / h) * 0.4
+      const k = (y * w + x) * 4
+      let r = 150 + e * 90, g = 70 + e * 50, b = 40 + e * 25
+      if (e < 0.42) {
+        r *= 0.7
+        g *= 0.7
+        b *= 0.7 // cañones y llanuras oscuras
+      }
+      const hielo = Math.max(0, (lat - 0.86) / 0.14)
+      if (hielo > 0) {
+        r += (240 - r) * hielo
+        g += (236 - g) * hielo
+        b += (230 - b) * hielo
+      }
+      img.data[k] = r
+      img.data[k + 1] = g
+      img.data[k + 2] = b
+      img.data[k + 3] = 255
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+/** Textura del gigante gaseoso: bandas de nubes en tonos crema y ocre con turbulencias y una gran tormenta. */
+export function texturaGigante(semilla = 33): THREE.Texture {
+  const w = 512, h = 256
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  const img = ctx.createImageData(w, h)
+  const turb = ruido(semilla, 6, 12)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x / w, v = y / h
+      // Las bandas son franjas horizontales deformadas por el ruido.
+      const banda = Math.sin((v + (turb(u, v) - 0.5) * 0.12) * Math.PI * 14) * 0.5 + 0.5
+      const claro = 0.55 + banda * 0.45
+      const k = (y * w + x) * 4
+      let r = 225 * claro, g = 190 * claro, b = 140 * claro
+      // La gran mancha: un óvalo rojizo en el hemisferio sur.
+      const dx = (u - 0.68) / 0.09, dy = (v - 0.64) / 0.05
+      const mancha = Math.max(0, 1 - (dx * dx + dy * dy))
+      r = r + (200 - r) * mancha
+      g = g + (110 - g) * mancha
+      b = b + (80 - b) * mancha
+      img.data[k] = r
+      img.data[k + 1] = g
+      img.data[k + 2] = b
+      img.data[k + 3] = 255
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+/** Anillo del gigante: franjas concéntricas con huecos, en una tira que RingGeometry envuelve de dentro afuera. */
+export function texturaAnillo(semilla = 45): THREE.Texture {
+  const w = 256, h = 8
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  const rnd = aleatorio(semilla)
+  for (let x = 0; x < w; x++) {
+    const t = x / w
+    const hueco = (t > 0.42 && t < 0.47) || (t > 0.78 && t < 0.8)
+    const a = hueco ? 0.05 : 0.25 + rnd() * 0.5 * (1 - Math.abs(t - 0.5) * 1.2)
+    const l = 190 + rnd() * 50
+    ctx.fillStyle = `rgba(${l},${l - 15},${l - 40},${a})`
+    ctx.fillRect(x, 0, 1, h)
+  }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
 }
