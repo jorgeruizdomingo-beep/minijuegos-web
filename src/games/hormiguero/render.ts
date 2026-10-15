@@ -21,7 +21,7 @@ type Exploradora = { x: number; y: number; ang: number; giro: number; v: number;
 
 type Particula = { x: number; y: number; vx: number; vy: number; vida: number; r: number; color: string }
 
-const MAX_HORMIGAS = 140
+const MAX_HORMIGAS = 120
 const MAX_EXPLORADORAS = 8
 
 export class EscenaHormiguero implements Escena {
@@ -31,11 +31,13 @@ export class EscenaHormiguero implements Escena {
   private exploradoras: Exploradora[] = []
   private particulas: Particula[] = []
   private estrellas: { x: number; y: number; f: number }[] = []
+  private luciernagas: { x: number; y: number; ang: number; f: number }[] = []
   private ancho = 0
   private alto = 0
   private dpr = 1
   private tiempo = 0
   private impacto = 0 // 1 justo tras un clic, decae a 0 (aplasta la miga)
+  private impulso = 0 // 1 justo tras un clic, decae: las hormigas aprietan el paso
   private canvas: HTMLCanvasElement
 
   constructor(canvas: HTMLCanvasElement, juego: Incremental) {
@@ -45,6 +47,7 @@ export class EscenaHormiguero implements Escena {
     this.redimensionar()
     new ResizeObserver(() => this.redimensionar()).observe(canvas)
     for (let i = 0; i < 40; i++) this.estrellas.push({ x: Math.random(), y: Math.random() * 0.55, f: Math.random() * 6 })
+    for (let i = 0; i < 14; i++) this.luciernagas.push({ x: Math.random(), y: 0.25 + Math.random() * 0.6, ang: Math.random() * 7, f: Math.random() * 7 })
   }
 
   private redimensionar() {
@@ -55,6 +58,12 @@ export class EscenaHormiguero implements Escena {
     this.canvas.width = this.ancho * this.dpr
     this.canvas.height = this.alto * this.dpr
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+  }
+
+  /** 0 = pleno día, 1 = noche cerrada. Ciclo de cuatro minutos. */
+  private noche() {
+    const fase = (this.tiempo % 240) / 240
+    return 0.5 - 0.5 * Math.cos(fase * Math.PI * 2)
   }
 
   private n(id: string) {
@@ -69,7 +78,7 @@ export class EscenaHormiguero implements Escena {
         t: Math.random(),
         v: 0.08 + Math.random() * 0.1,
         dir: Math.random() < 0.5 ? 1 : -1,
-        carril: (Math.random() - 0.5) * 36,
+        carril: (Math.random() - 0.5) * 50,
         carga: Math.random() < 0.5,
         hoja: false,
         fase: Math.random() * 40,
@@ -94,6 +103,7 @@ export class EscenaHormiguero implements Escena {
   /** Explosión de migas al hacer clic. */
   clic(x: number, y: number, n = 12) {
     this.impacto = 1
+    this.impulso = 1
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2
       const s = 60 + Math.random() * 140
@@ -128,6 +138,7 @@ export class EscenaHormiguero implements Escena {
   frame(dt: number) {
     this.tiempo += dt
     this.impacto = Math.max(0, this.impacto - dt * 5)
+    this.impulso = Math.max(0, this.impulso - dt * 1.5)
     const { ctx, ancho, alto } = this
 
     ctx.clearRect(0, 0, ancho, alto)
@@ -137,10 +148,11 @@ export class EscenaHormiguero implements Escena {
     this.dibujarNido()
     this.dibujarMiga()
 
-    // Hormigas del rastro
+    // Hormigas del rastro: con más producción van más deprisa.
     const hayHojas = this.n('cortadora') > 0
+    const prisa = 1 + Math.min(1.2, Math.log10(this.juego.produccionTotal() + 1) / 6) + this.impulso * 1.5
     for (const h of this.hormigas) {
-      h.t += h.v * h.dir * dt
+      h.t += h.v * prisa * h.dir * dt
       if (h.t >= 1) { h.t = 1; h.dir = -1; h.carga = true; h.hoja = hayHojas && Math.random() < 0.4 }
       if (h.t <= 0) { h.t = 0; h.dir = 1; h.carga = false }
       const [x, y] = this.punto(h.t, h.carril)
@@ -163,6 +175,8 @@ export class EscenaHormiguero implements Escena {
       }
       this.dibujarHormiga(e.x, e.y, e.ang, null, e.fase + this.tiempo * 3)
     }
+
+    this.dibujarNoche(dt)
 
     // Partículas
     this.particulas = this.particulas.filter((p) => p.vida > 0)
@@ -188,15 +202,43 @@ export class EscenaHormiguero implements Escena {
     ctx.fillStyle = g
     ctx.fillRect(0, 0, ancho, alto)
 
-    // Con la colonia cósmica, el cielo se llena de estrellas.
-    if (this.n('cosmica') > 0) {
+    // Estrellas de noche; con la colonia cósmica, también de día.
+    const estrellas = Math.max(this.noche(), this.n('cosmica') > 0 ? 1 : 0)
+    if (estrellas > 0.05) {
       for (const s of this.estrellas) {
-        const a = 0.35 + 0.35 * Math.sin(this.tiempo * 1.5 + s.f)
+        const a = (0.35 + 0.35 * Math.sin(this.tiempo * 1.5 + s.f)) * estrellas
         ctx.fillStyle = `rgba(220,230,255,${a})`
         ctx.beginPath()
         ctx.arc(s.x * ancho, s.y * alto, 1.2, 0, Math.PI * 2)
         ctx.fill()
       }
+    }
+  }
+
+  /** Velo azulado de noche y luciérnagas sobre la escena. */
+  private dibujarNoche(dt: number) {
+    const { ctx, ancho, alto } = this
+    const n = this.noche()
+    if (n < 0.03) return
+    ctx.fillStyle = `rgba(8,12,40,${0.32 * n})`
+    ctx.fillRect(0, 0, ancho, alto)
+    for (const l of this.luciernagas) {
+      l.ang += (Math.random() - 0.5) * dt * 4
+      l.x += (Math.cos(l.ang) * 14 * dt) / ancho
+      l.y += (Math.sin(l.ang) * 10 * dt) / alto
+      if (l.x < 0.02 || l.x > 0.98) l.ang = Math.PI - l.ang
+      if (l.y < 0.2 || l.y > 0.9) l.ang = -l.ang
+      const brillo = Math.max(0, Math.sin(this.tiempo * 2.5 + l.f)) * n
+      if (brillo < 0.05) continue
+      const x = l.x * ancho
+      const y = l.y * alto
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 9)
+      g.addColorStop(0, `rgba(210,255,120,${0.9 * brillo})`)
+      g.addColorStop(1, 'rgba(210,255,120,0)')
+      ctx.fillStyle = g
+      ctx.beginPath()
+      ctx.arc(x, y, 9, 0, Math.PI * 2)
+      ctx.fill()
     }
   }
 
@@ -372,11 +414,15 @@ export class EscenaHormiguero implements Escena {
     }
   }
 
-  /** Miga grande (objetivo de clic) con pulso; se aplasta al hacer clic. */
+  /**
+   * Objetivo de clic con pulso; se aplasta al hacer clic. Lo que hay arriba
+   * crece con la colonia: una miga, luego una galleta y al final una tarta.
+   */
   private dibujarMiga() {
     const { ctx, ancho } = this
     const pulso = 1 + Math.sin(this.tiempo * 3) * 0.03
     const sq = this.impacto * this.impacto
+    const historico = this.juego.estado.historico
     ctx.save()
     ctx.translate(ancho * 0.5, 50)
     ctx.scale(pulso * (1 + 0.18 * sq), pulso * (1 - 0.22 * sq))
@@ -391,6 +437,14 @@ export class EscenaHormiguero implements Escena {
     ctx.shadowColor = 'rgba(0,0,0,0.5)'
     ctx.shadowBlur = 8
     ctx.shadowOffsetY = 4
+    if (historico >= 1e9) this.dibujarTarta()
+    else if (historico >= 1e6) this.dibujarGalleta()
+    else this.dibujarMigaSuelta()
+    ctx.restore()
+  }
+
+  private dibujarMigaSuelta() {
+    const { ctx } = this
     ctx.fillStyle = '#d9a35a'
     ctx.beginPath()
     ctx.moveTo(-34, 10)
@@ -415,7 +469,65 @@ export class EscenaHormiguero implements Escena {
     ctx.lineTo(-4, -8)
     ctx.closePath()
     ctx.fill()
-    ctx.restore()
+  }
+
+  private dibujarGalleta() {
+    const { ctx } = this
+    ctx.fillStyle = '#c98b4a'
+    ctx.beginPath()
+    ctx.arc(0, 0, 32, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowColor = 'transparent'
+    // Un mordisco
+    ctx.fillStyle = '#3a2a1e'
+    ctx.beginPath()
+    ctx.arc(26, -18, 11, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#dca065'
+    ctx.beginPath()
+    ctx.arc(-4, -3, 25, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#4a2c1a'
+    for (const [px, py] of [[-14, -8], [8, -12], [-2, 6], [14, 8], [-18, 10], [6, 20]] as const) {
+      ctx.beginPath()
+      ctx.ellipse(px, py, 3.5, 2.8, 0.5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  private dibujarTarta() {
+    const { ctx } = this
+    // Porción vista de lado: base, bizcocho, crema, bizcocho, cobertura
+    ctx.fillStyle = '#e8c27a'
+    ctx.beginPath()
+    ctx.moveTo(-36, 22)
+    ctx.lineTo(36, 22)
+    ctx.lineTo(36, -6)
+    ctx.lineTo(0, -30)
+    ctx.lineTo(-36, -6)
+    ctx.closePath()
+    ctx.fill()
+    ctx.shadowColor = 'transparent'
+    ctx.fillStyle = '#f7e6ee'
+    ctx.fillRect(-36, 2, 72, 6)
+    ctx.fillStyle = '#c0392b'
+    ctx.beginPath()
+    ctx.moveTo(-36, -6)
+    ctx.lineTo(0, -30)
+    ctx.lineTo(36, -6)
+    ctx.lineTo(36, -2)
+    ctx.lineTo(0, -26)
+    ctx.lineTo(-36, -2)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#b22222'
+    ctx.beginPath()
+    ctx.arc(0, -32, 5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.beginPath()
+    ctx.arc(-2, -34, 1.5, 0, Math.PI * 2)
+    ctx.fill()
   }
 
   private dibujarHoja(x: number, y: number, ang: number, r: number) {
