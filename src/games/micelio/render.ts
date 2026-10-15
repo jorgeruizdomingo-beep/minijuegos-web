@@ -121,12 +121,23 @@ export class EscenaMicelio implements Escena {
     if (this.segmentos.length) this.pulsos.push({ seg: Math.floor(Math.random() * this.segmentos.length), t: 0, v: 2.5 })
   }
 
+  // Parámetros de la lluvia según las mejoras compradas.
+  private get visibleSeg() {
+    return this.juego.tieneMejora('lluvia_1') ? LLUVIA.visibleSegMejorada : LLUVIA.visibleSeg
+  }
+  private get duracionSeg() {
+    return this.juego.tieneMejora('lluvia_2') ? LLUVIA.duracionSegMejorada : LLUVIA.duracionSeg
+  }
+  private get multLluvia() {
+    return this.juego.tieneMejora('lluvia_3') ? LLUVIA.multMejorado : LLUVIA.mult
+  }
+
   private empezarLluvia() {
     this.lluvia.fase = 'lloviendo'
-    this.lluvia.resta = LLUVIA.duracionSeg
-    this.juego.multiplicadorTemporal = LLUVIA.mult
+    this.lluvia.resta = this.duracionSeg
+    this.juego.multiplicadorTemporal = this.multLluvia
     sonidos.mejora()
-    toast(`🌧️ ¡Lluvia! Producción x${LLUVIA.mult} durante ${LLUVIA.duracionSeg} s`, 3000)
+    toast(`🌧️ ¡Lluvia! Producción x${this.multLluvia} durante ${this.duracionSeg} s`, 3000)
   }
 
   private actualizarLluvia(dt: number) {
@@ -135,7 +146,7 @@ export class EscenaMicelio implements Escena {
     if (l.resta > 0) return
     if (l.fase === 'espera') {
       l.fase = 'nube'
-      l.resta = LLUVIA.visibleSeg
+      l.resta = this.visibleSeg
       l.x = 0.2 + Math.random() * 0.6
     } else {
       // La nube se va (sin pinchar) o la lluvia termina: vuelta a esperar.
@@ -319,12 +330,12 @@ export class EscenaMicelio implements Escena {
       ctx.strokeStyle = 'rgba(255,255,255,0.8)'
       ctx.lineWidth = 3
       ctx.beginPath()
-      ctx.arc(cx, cy + 2, 34, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * l.resta) / LLUVIA.visibleSeg)
+      ctx.arc(cx, cy + 2, 34, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * Math.min(1, l.resta / this.visibleSeg)))
       ctx.stroke()
       ctx.fillStyle = '#ffffff'
       ctx.font = '600 12px system-ui, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(`¡Pínchala! x${LLUVIA.mult}`, cx, cy + 52)
+      ctx.fillText(`¡Pínchala! x${this.multLluvia}`, cx, cy + 52)
     }
     if (l.fase === 'lloviendo') {
       while (this.gotas.length < 90) this.gotas.push({ x: Math.random() * ancho, y: Math.random() * alto, v: 300 + Math.random() * 200 })
@@ -350,7 +361,7 @@ export class EscenaMicelio implements Escena {
       ctx.fillStyle = '#8fd3ff'
       ctx.font = '700 13px system-ui, sans-serif'
       ctx.textAlign = 'left'
-      ctx.fillText(`🌧️ Lluvia x${LLUVIA.mult} · ${Math.ceil(l.resta)} s`, 10, 20)
+      ctx.fillText(`🌧️ Lluvia x${this.multLluvia} · ${Math.ceil(l.resta)} s`, 10, 20)
     }
   }
 }
