@@ -8,12 +8,15 @@ import type { Escena } from '../../core/arranque'
 import type { Incremental } from '../../core/incremental'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { APARIENCIAS, CONFIG, type Apariencia } from './data'
-import { atlas, modelo, texturasPlaneta } from './modelos'
+import { atlas, modelo, texturaAnillo, texturaGigante, texturasPlaneta, texturaVecino } from './modelos'
 
 /** Objetos dibujados por tipo; a partir de ahí crecen un poco en vez de multiplicarse. */
 const MAX_POR_TIPO = 28
 const POS_ESTRELLA = new THREE.Vector3(6.5, 4.2, -8)
 const RADIO_PLANETA = 1.2
+/** Órbitas de los otros mundos alrededor de la estrella (fuera de la cáscara Dyson, radio 2,4). */
+const ORBITA_VECINO = 5
+const ORBITA_GIGANTE = 9
 
 type Capa = {
   id: string
@@ -66,6 +69,20 @@ export class EscenaOrbita implements Escena {
   private sol: THREE.DirectionalLight
   private nucleo: THREE.Mesh
   private matPlaneta: THREE.MeshStandardMaterial
+  // Sistema solar: todo lo que orbita la estrella cuelga de este grupo, colocado en la estrella.
+  private sistema = new THREE.Group()
+  private orbitaVecino = new THREE.Group()
+  private pivoteVecino = new THREE.Group()
+  private vecino: THREE.Mesh
+  private orbitaGigante = new THREE.Group()
+  private pivoteGigante = new THREE.Group()
+  private gigante: THREE.Mesh
+  private lineaVecino: THREE.Mesh
+  private lineaGigante: THREE.Mesh
+  private mirada = new THREE.Vector3()
+  private miradaObjetivo = new THREE.Vector3()
+  private escalaVecino = 0
+  private escalaGigante = 0
   private matModelos: THREE.MeshStandardMaterial
   private brilloCiudades = 0.35
   private estrellaLocal = new THREE.Vector3()
@@ -103,6 +120,10 @@ export class EscenaOrbita implements Escena {
     this.luzEstrella = new THREE.PointLight(0xffd27a, 0, 40, 1.5)
     this.luzEstrella.position.copy(POS_ESTRELLA)
     this.scene.add(this.luzEstrella)
+    // Luz constante de la estrella para lo que la orbita de cerca (cáscara, cinturón, otros mundos); al planeta apenas llega.
+    const luzSistema = new THREE.PointLight(0xffe4b8, 30, 60, 2)
+    luzSistema.position.copy(POS_ESTRELLA)
+    this.scene.add(luzSistema)
 
     // La estrella: un resplandor (sprite) con un núcleo brillante.
     this.estrella = new THREE.Sprite(
@@ -202,6 +223,44 @@ export class EscenaOrbita implements Escena {
     this.nebulosa.visible = false
     this.scene.add(this.nebulosa)
 
+    // Sistema solar: el planeta vecino y el gigante gaseoso, ocultos hasta que se coloniza algo en ellos.
+    this.sistema.position.copy(POS_ESTRELLA)
+    this.scene.add(this.sistema)
+    this.orbitaVecino.rotation.set(0.22, Math.random() * Math.PI * 2, 0.1)
+    this.pivoteVecino.position.set(ORBITA_VECINO, 0, 0)
+    this.vecino = new THREE.Mesh(new THREE.SphereGeometry(0.75, this.movil ? 28 : 40, this.movil ? 20 : 28), new THREE.MeshStandardMaterial({ map: texturaVecino(), roughness: 0.95, metalness: 0 }))
+    this.vecino.visible = false
+    this.pivoteVecino.add(this.vecino)
+    this.orbitaVecino.add(this.pivoteVecino)
+    this.sistema.add(this.orbitaVecino)
+    this.orbitaGigante.rotation.set(-0.15, Math.random() * Math.PI * 2, 0.05)
+    this.pivoteGigante.position.set(ORBITA_GIGANTE, 0, 0)
+    this.gigante = new THREE.Mesh(new THREE.SphereGeometry(1.3, this.movil ? 32 : 48, this.movil ? 24 : 32), new THREE.MeshStandardMaterial({ map: texturaGigante(), roughness: 0.9, metalness: 0 }))
+    const anilloGigante = new THREE.Mesh(
+      new THREE.RingGeometry(1.7, 2.7, 96, 1),
+      new THREE.MeshBasicMaterial({ map: texturaAnillo(), transparent: true, side: THREE.DoubleSide, depthWrite: false }),
+    )
+    // RingGeometry reparte las UV en círculo; la tira del anillo se lee de dentro afuera.
+    const uvAnillo = anilloGigante.geometry.getAttribute('uv') as THREE.BufferAttribute
+    const posAnillo = anilloGigante.geometry.getAttribute('position') as THREE.BufferAttribute
+    for (let k = 0; k < uvAnillo.count; k++) uvAnillo.setXY(k, (Math.hypot(posAnillo.getX(k), posAnillo.getY(k)) - 1.7) / 1, 0.5)
+    anilloGigante.rotation.x = Math.PI / 2 - 0.35
+    this.gigante.add(anilloGigante)
+    this.gigante.visible = false
+    this.pivoteGigante.add(this.gigante)
+    this.orbitaGigante.add(this.pivoteGigante)
+    this.sistema.add(this.orbitaGigante)
+    const lineaOrbita = (r: number) => {
+      const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.02, r + 0.02, 128), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }))
+      m.rotation.x = Math.PI / 2
+      m.visible = false
+      return m
+    }
+    this.lineaVecino = lineaOrbita(ORBITA_VECINO)
+    this.orbitaVecino.add(this.lineaVecino)
+    this.lineaGigante = lineaOrbita(ORBITA_GIGANTE)
+    this.orbitaGigante.add(this.lineaGigante)
+
     // Capas de órbita, una por tipo de edificio
     for (const e of CONFIG.edificios) {
       const ap = APARIENCIAS[e.id]
@@ -220,11 +279,10 @@ export class EscenaOrbita implements Escena {
       anillo.rotation.x = Math.PI / 2
       grupo.add(anillo)
       // Los segmentos Dyson no orbitan el planeta: van cerrando una cáscara alrededor de la estrella.
-      if (ap.forma === 'segmento') {
-        grupo.position.copy(POS_ESTRELLA)
-        anillo.visible = false
-      }
-      this.scene.add(grupo)
+      if (ap.forma === 'segmento') anillo.visible = false
+      // Cada capa cuelga de lo que orbita: el planeta, la estrella, el vecino o el gigante.
+      const padre = ap.centro === 'estrella' ? this.sistema : ap.centro === 'vecino' ? this.pivoteVecino : ap.centro === 'gigante' ? this.pivoteGigante : this.scene
+      padre.add(grupo)
       const fases = Array.from({ length: MAX_POR_TIPO }, () => Math.random() * Math.PI * 2)
       this.capas.set(e.id, { id: e.id, malla, apariencia: ap, grupo, anillo, fases, nacimientos: new Array(MAX_POR_TIPO).fill(-10), visibles: 0 })
     }
@@ -233,6 +291,9 @@ export class EscenaOrbita implements Escena {
     new ResizeObserver(() => this.redimensionar()).observe(canvas)
     this.poblacion(0)
     this.distancia = this.distanciaObjetivo
+    this.mirada.copy(this.miradaObjetivo)
+    this.escalaVecino = this.vecino.visible ? 1 : 0
+    this.escalaGigante = this.gigante.visible ? 1 : 0
   }
 
   /** Modelo del edificio (ver modelos.ts) a la escala de su apariencia. Los segmentos Dyson llevan el radio de la cáscara. */
@@ -266,20 +327,37 @@ export class EscenaOrbita implements Escena {
     }
     this.vidas = vidas
     let radioExterior = APARIENCIAS.panel.radio
+    let alcanceSistema = 0 // distancia máxima a la estrella de lo que la orbita; 0 = nada todavía
     for (const [id, capa] of this.capas) {
       const n = c[id] ?? 0
-      const visibles = Math.min(MAX_POR_TIPO, n)
+      const ap = capa.apariencia
+      const visibles = Math.min(MAX_POR_TIPO, ap.maxVisible ?? MAX_POR_TIPO, n)
       // Cada compra nueva entra con una pequeña animación de llegada.
       for (let i = capa.visibles; i < visibles; i++) capa.nacimientos[i] = this.tiempo
       capa.visibles = visibles
       capa.malla.count = visibles
       ;(capa.anillo.material as THREE.MeshBasicMaterial).opacity = n > 0 ? 0.22 : 0
-      if (n > 0 && capa.apariencia.forma !== 'segmento') radioExterior = Math.max(radioExterior, capa.apariencia.radio)
+      if (n === 0) continue
+      const centro = ap.centro ?? 'planeta'
+      if (centro === 'planeta') radioExterior = Math.max(radioExterior, ap.radio)
+      else alcanceSistema = Math.max(alcanceSistema, ap.radio + (centro === 'vecino' ? ORBITA_VECINO : centro === 'gigante' ? ORBITA_GIGANTE : 0))
     }
+    // Otros mundos: aparecen con la primera colonia o el primer puerto.
+    this.vecino.visible = this.lineaVecino.visible = (c.colonia ?? 0) > 0
+    this.gigante.visible = this.lineaGigante.visible = (c.puerto ?? 0) > 0
     // Encuadre: lo justo para que la órbita más exterior poblada quepa entera.
-    // En pantallas estrechas (móvil en vertical) hay que alejarse algo más.
+    // Con obras alrededor de la estrella la vista se abre: se mira a medio camino entre el planeta y la estrella
+    // y se abarca lo que orbita a cualquiera de los dos. En pantallas estrechas (móvil en vertical) hay que alejarse algo más.
     const estrechez = Math.max(1, 1.45 / this.camara.aspect) ** 0.6
-    this.distanciaObjetivo = (5 + radioExterior * 1.3) * estrechez
+    let alcance = radioExterior
+    if (alcanceSistema > 0) {
+      this.miradaObjetivo.copy(POS_ESTRELLA).multiplyScalar(0.5)
+      const medio = POS_ESTRELLA.length() * 0.5
+      alcance = Math.max(medio + radioExterior, medio + alcanceSistema)
+    } else {
+      this.miradaObjetivo.set(0, 0, 0)
+    }
+    this.distanciaObjetivo = (5 + alcance * 1.3) * estrechez
   }
 
   /** La escena evoluciona con el árbol permanente, los núcleos, las vidas y las mejoras compradas. */
@@ -400,6 +478,16 @@ export class EscenaOrbita implements Escena {
     if (this.luna.visible) this.luna.position.set(Math.cos(this.tiempo * 0.5) * 1.75, Math.sin(this.tiempo * 0.5) * 0.6, Math.sin(this.tiempo * 0.5) * 1.75)
     this.luzEstrella.intensity = this.pulso * 60
 
+    // Otros mundos: giran alrededor de la estrella y sobre sí mismos; al aparecer crecen desde cero.
+    this.orbitaVecino.rotation.y = this.tiempo * 0.06
+    this.orbitaGigante.rotation.y = this.tiempo * 0.03
+    this.vecino.rotation.y += dt * 0.12
+    this.gigante.rotation.y += dt * 0.2
+    this.escalaVecino += ((this.vecino.visible ? 1 : 0) - this.escalaVecino) * Math.min(1, dt * 2)
+    this.escalaGigante += ((this.gigante.visible ? 1 : 0) - this.escalaGigante) * Math.min(1, dt * 2)
+    this.vecino.scale.setScalar(Math.max(0.001, this.escalaVecino))
+    this.gigante.scale.setScalar(Math.max(0.001, this.escalaGigante))
+
     for (const capa of this.capas.values()) {
       const { malla, apariencia: ap, fases, visibles } = capa
       // Más de MAX_POR_TIPO unidades: los objetos crecen un poco para seguir mostrando progreso.
@@ -412,14 +500,18 @@ export class EscenaOrbita implements Escena {
       // Paneles, espejos y velas miran a la estrella; el resto apunta sus antenas al planeta.
       const miraEstrella = ap.forma === 'panel' || ap.forma === 'vela'
       if (miraEstrella) capa.grupo.worldToLocal(this.estrellaLocal.copy(POS_ESTRELLA))
-      const giro = ap.forma === 'toro' ? 0.35 : 0.06
+      const giro = ap.forma === 'toro' || ap.forma === 'ciudad' ? 0.35 : 0.06
+      // El cable del ascensor va clavado al ecuador: ni bamboleo ni giro. El cinturón se desparrama en anchura y altura.
+      const anclado = ap.forma === 'ascensor'
+      const dispersion = ap.forma === 'cinturon' ? 0.22 : 0
       for (let i = 0; i < visibles; i++) {
         const a = fases[i] + this.tiempo * ap.velocidad
-        const bamboleo = Math.sin(this.tiempo * 0.7 + fases[i]) * 0.08
-        this.dummy.position.set(Math.cos(a) * ap.radio, bamboleo, Math.sin(a) * ap.radio)
+        const radio = ap.radio * (1 + dispersion * Math.sin(fases[i] * 7.3))
+        const bamboleo = anclado ? 0 : Math.sin(this.tiempo * 0.7 + fases[i]) * 0.08 + dispersion * Math.cos(fases[i] * 5.1) * 2
+        this.dummy.position.set(Math.cos(a) * radio, bamboleo, Math.sin(a) * radio)
         if (miraEstrella) this.dummy.lookAt(this.estrellaLocal)
         else this.dummy.lookAt(0, 0, 0)
-        this.dummy.rotateZ(fases[i] + this.tiempo * giro)
+        if (!anclado) this.dummy.rotateZ(fases[i] + this.tiempo * giro)
         this.dummy.scale.setScalar(crecimiento * this.llegada(capa.nacimientos[i]))
         this.dummy.updateMatrix()
         malla.setMatrixAt(i, this.dummy.matrix)
@@ -454,11 +546,12 @@ export class EscenaOrbita implements Escena {
     }
     this.animarCometa(dt)
 
-    // Cámara: se aleja suavemente según crece la órbita y lleva un vaivén lento.
+    // Cámara: se aleja suavemente según crece la órbita, desplaza la mirada hacia la estrella cuando hay sistema y lleva un vaivén lento.
     this.distancia += (this.distanciaObjetivo - this.distancia) * Math.min(1, dt * 1.5)
+    this.mirada.lerp(this.miradaObjetivo, Math.min(1, dt * 1.5))
     const d = this.distancia
-    this.camara.position.set(Math.sin(this.tiempo * 0.05) * d * 0.18, d * 0.42 + Math.sin(this.tiempo * 0.08) * 0.05 * d, d)
-    this.camara.lookAt(0, 0, 0)
+    this.camara.position.set(Math.sin(this.tiempo * 0.05) * d * 0.18, d * 0.42 + Math.sin(this.tiempo * 0.08) * 0.05 * d, d).add(this.mirada)
+    this.camara.lookAt(this.mirada)
     this.renderer.render(this.scene, this.camara)
   }
 }
