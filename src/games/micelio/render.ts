@@ -34,10 +34,26 @@ export class EscenaMicelio implements Escena {
   private pulsos: Pulso[] = []
   private particulas: Particula[] = []
   private gotas: Gota[] = []
-  private lluvia: { fase: 'espera' | 'nube' | 'lloviendo'; resta: number; x: number } = {
+  private lluvia: { fase: 'espera' | 'nube' | 'lloviendo'; resta: number; x: number; rocio: boolean } = {
     fase: 'espera',
     resta: LLUVIA.esperaMinSeg,
     x: 0.5,
+    rocio: false,
+  }
+  // Aspecto del mapa: lo fija cambio() a partir de eslabones, mejoras, nodos del árbol y esporas.
+  private aspecto = {
+    luz: false, // nodo Bioluminiscencia
+    flores: false, // nodo Claro de flores
+    arbolMadre: false, // nodo Árbol madre
+    nubeLarga: false,
+    rocio: false,
+    lluviaDoble: false,
+    grosor: 0, // mejoras de hifa compradas (0-3): raíces más gruesas
+    setaGrande: 0, // mejoras de seta compradas (0-3)
+    anilloDoble: false, // mejora 'Anillo de anillos'
+    bosqueDenso: false, // mejora 'Bosque primario'
+    estrellas: 0, // esporas: el cielo se llena de estrellas
+    aurora: false, // 10 esporas o más
   }
 
   constructor(canvas: HTMLCanvasElement, juego: Incremental) {
@@ -60,6 +76,24 @@ export class EscenaMicelio implements Escena {
 
   private get suelo() {
     return this.alto * 0.36
+  }
+
+  /** El motor lo llama tras cargar, comprar, coger un nodo o soltar esporas. */
+  cambio() {
+    const j = this.juego
+    const a = this.aspecto
+    a.luz = j.tieneDesbloqueo('luz')
+    a.flores = j.tieneDesbloqueo('flores')
+    a.arbolMadre = j.tieneNodo('arbol_madre')
+    a.nubeLarga = j.tieneDesbloqueo('nube_larga')
+    a.rocio = j.tieneDesbloqueo('rocio')
+    a.lluviaDoble = j.tieneDesbloqueo('lluvia_doble')
+    a.grosor = ['hifa_1', 'hifa_2', 'hifa_3'].filter((id) => j.tieneMejora(id)).length
+    a.setaGrande = ['seta_1', 'seta_2', 'seta_3'].filter((id) => j.tieneMejora(id)).length
+    a.anilloDoble = j.tieneMejora('anillo_3')
+    a.bosqueDenso = j.tieneMejora('bosque_3')
+    a.estrellas = Math.min(80, j.estado.prestigio * 4)
+    a.aurora = j.estado.prestigio >= 10
   }
 
   /** La red sigue a las hifas y al micelio; el total de edificios no se usa. */
@@ -123,21 +157,26 @@ export class EscenaMicelio implements Escena {
 
   // Parámetros de la lluvia según las mejoras compradas.
   private get visibleSeg() {
-    return this.juego.tieneMejora('lluvia_1') ? LLUVIA.visibleSegMejorada : LLUVIA.visibleSeg
+    const base = this.juego.tieneMejora('lluvia_1') ? LLUVIA.visibleSegMejorada : LLUVIA.visibleSeg
+    return this.aspecto.nubeLarga ? base * 2 : base
   }
   private get duracionSeg() {
-    return this.juego.tieneMejora('lluvia_2') ? LLUVIA.duracionSegMejorada : LLUVIA.duracionSeg
+    const base = this.juego.tieneMejora('lluvia_2') ? LLUVIA.duracionSegMejorada : LLUVIA.duracionSeg
+    return this.aspecto.lluviaDoble ? base * 2 : base
   }
   private get multLluvia() {
     return this.juego.tieneMejora('lluvia_3') ? LLUVIA.multMejorado : LLUVIA.mult
   }
 
-  private empezarLluvia() {
+  private empezarLluvia(rocio = false) {
     this.lluvia.fase = 'lloviendo'
+    this.lluvia.rocio = rocio
     this.lluvia.resta = this.duracionSeg
-    this.juego.multiplicadorTemporal = this.multLluvia
-    sonidos.mejora()
-    toast(`🌧️ ¡Lluvia! Producción x${this.multLluvia} durante ${this.duracionSeg} s`, 3000)
+    // El rocío (nodo del árbol) da la mitad del bonus sin pinchar la nube.
+    const mult = rocio ? 1 + (this.multLluvia - 1) / 2 : this.multLluvia
+    this.juego.multiplicadorTemporal = mult
+    if (!rocio) sonidos.mejora()
+    toast(rocio ? `💧 Rocío: producción x${mult} durante ${this.duracionSeg} s` : `🌧️ ¡Lluvia! Producción x${mult} durante ${this.duracionSeg} s`, 3000)
   }
 
   private actualizarLluvia(dt: number) {
@@ -148,6 +187,10 @@ export class EscenaMicelio implements Escena {
       l.fase = 'nube'
       l.resta = this.visibleSeg
       l.x = 0.2 + Math.random() * 0.6
+    } else if (l.fase === 'nube' && this.aspecto.rocio) {
+      // La nube se va sin pincharla, pero con Rocío llueve igual, a media fuerza.
+      this.empezarLluvia(true)
+      return
     } else {
       // La nube se va (sin pinchar) o la lluvia termina: vuelta a esperar.
       if (l.fase === 'lloviendo') this.juego.multiplicadorTemporal = 1
@@ -171,6 +214,7 @@ export class EscenaMicelio implements Escena {
     cielo.addColorStop(1, lloviendo ? '#26333a' : '#2b3b2e')
     ctx.fillStyle = cielo
     ctx.fillRect(0, 0, ancho, suelo)
+    this.dibujarCielo()
     const tierra = ctx.createLinearGradient(0, suelo, 0, alto)
     tierra.addColorStop(0, '#3a2b1f')
     tierra.addColorStop(1, '#140f0b')
@@ -210,16 +254,45 @@ export class EscenaMicelio implements Escena {
     ctx.globalAlpha = 1
   }
 
+  /** Estrellas por cada espora y una aurora a partir de diez: el cielo cuenta las vidas. */
+  private dibujarCielo() {
+    const { ctx, ancho } = this
+    const a = this.aspecto
+    const suelo = this.suelo
+    if (a.aurora) {
+      const g = ctx.createLinearGradient(0, 0, ancho, suelo * 0.5)
+      const f = this.tiempo * 0.3
+      g.addColorStop(0, `rgba(80, 220, 160, ${0.08 + 0.05 * Math.sin(f)})`)
+      g.addColorStop(0.5, `rgba(120, 120, 255, ${0.1 + 0.05 * Math.sin(f + 2)})`)
+      g.addColorStop(1, `rgba(80, 220, 160, ${0.08 + 0.05 * Math.sin(f + 4)})`)
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, ancho, suelo * 0.6)
+    }
+    ctx.fillStyle = '#fff6d5'
+    for (let i = 0; i < a.estrellas; i++) {
+      const x = ((i * 0.618 + 0.05) % 1) * ancho
+      const y = ((i * 0.7548776662 + 0.1) % 1) * suelo * 0.55 // constante distinta a la de x para que no formen una línea
+      const parpadeo = 0.5 + 0.5 * Math.sin(this.tiempo * 2 + i)
+      ctx.globalAlpha = 0.4 + 0.6 * parpadeo
+      ctx.fillRect(x, y, 2, 2)
+    }
+    ctx.globalAlpha = 1
+  }
+
   private dibujarRed(dt: number, j: Incremental) {
     const { ctx, ancho, alto } = this
-    const brillo = Math.min(1, 0.35 + escala(j.cantidad('micelio')) / 14)
+    const a = this.aspecto
+    const brillo = Math.min(1, 0.35 + escala(j.cantidad('micelio')) / 14) * (a.luz ? 1.3 : 1)
     ctx.lineCap = 'round'
     for (const s of this.segmentos) {
       const edad = Math.min(1, (this.tiempo - s.nace) / 0.6)
       const x2 = s.x1 + (s.x2 - s.x1) * edad
       const y2 = s.y1 + (s.y2 - s.y1) * edad
-      ctx.strokeStyle = `rgba(232, 226, 200, ${(0.75 - Math.min(0.45, s.nivel * 0.04)) * brillo})`
-      ctx.lineWidth = Math.max(0.8, 2.6 - s.nivel * 0.25)
+      ctx.strokeStyle = a.luz
+        ? `rgba(200, 240, 220, ${Math.min(1, (0.75 - Math.min(0.45, s.nivel * 0.04)) * brillo)})`
+        : `rgba(232, 226, 200, ${(0.75 - Math.min(0.45, s.nivel * 0.04)) * brillo})`
+      // Las mejoras de hifa engordan las raíces.
+      ctx.lineWidth = Math.max(0.8, 2.6 + a.grosor * 0.7 - s.nivel * 0.25)
       ctx.beginPath()
       ctx.moveTo(s.x1 * ancho, s.y1 * alto)
       ctx.lineTo(x2 * ancho, y2 * alto)
@@ -231,7 +304,11 @@ export class EscenaMicelio implements Escena {
     if (this.segmentos.length && this.pulsos.length < objetivo && Math.random() < 0.3) {
       this.pulsos.push({ seg: Math.floor(Math.random() * this.segmentos.length), t: 0, v: 1 + Math.random() })
     }
-    ctx.fillStyle = this.lluvia.fase === 'lloviendo' ? '#8fd3ff' : '#d6ff8f'
+    ctx.fillStyle = this.lluvia.fase === 'lloviendo' ? '#8fd3ff' : a.luz ? '#b7ffe0' : '#d6ff8f'
+    if (a.luz) {
+      ctx.shadowColor = '#b7ffe0'
+      ctx.shadowBlur = 8
+    }
     this.pulsos = this.pulsos.filter((p) => p.t < 1 && p.seg < this.segmentos.length)
     for (const p of this.pulsos) {
       p.t += p.v * dt
@@ -241,17 +318,35 @@ export class EscenaMicelio implements Escena {
       const y = (s.y2 + (s.y1 - s.y2) * p.t) * alto
       ctx.globalAlpha = Math.sin(p.t * Math.PI)
       ctx.beginPath()
-      ctx.arc(x, y, 2.4, 0, Math.PI * 2)
+      ctx.arc(x, y, a.luz ? 3 : 2.4, 0, Math.PI * 2)
       ctx.fill()
     }
     ctx.globalAlpha = 1
+    ctx.shadowBlur = 0
   }
 
   private dibujarBosque(j: Incremental) {
     const { ctx, ancho } = this
     const suelo = this.suelo
-    const arboles = Math.min(7, Math.ceil(escala(j.cantidad('bosque')) * 1.5))
+    const a = this.aspecto
+    const arboles = Math.min(a.bosqueDenso ? 11 : 7, Math.ceil(escala(j.cantidad('bosque')) * 1.5))
     const posiciones: number[] = []
+    if (a.arbolMadre) {
+      // Árbol madre en el centro: tronco ancho y tres pisos de copa.
+      const x = ancho * 0.5
+      const h = suelo * 0.95
+      ctx.fillStyle = '#4a3523'
+      ctx.fillRect(x - 9, suelo - h * 0.5, 18, h * 0.5)
+      for (const [k, c] of [[1, '#1f4a2a'], [0.72, '#27573a'], [0.45, '#2f6b45']] as const) {
+        ctx.fillStyle = c
+        ctx.beginPath()
+        ctx.moveTo(x, suelo - h * (0.35 + 0.65 * (1 - k) + k * 0.65))
+        ctx.lineTo(x - h * 0.38 * k, suelo - h * 0.35 * (1 - k) - h * 0.1)
+        ctx.lineTo(x + h * 0.38 * k, suelo - h * 0.35 * (1 - k) - h * 0.1)
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
     for (let i = 0; i < arboles; i++) {
       const x = ((i * 0.618 + 0.09) % 1) * ancho
       posiciones.push(x)
@@ -283,18 +378,41 @@ export class EscenaMicelio implements Escena {
 
   private dibujarSetas(j: Incremental) {
     const suelo = this.suelo
+    const asp = this.aspecto
     const setas = Math.min(16, Math.ceil(escala(j.cantidad('seta')) * 2))
     for (let i = 0; i < setas; i++) {
       const x = ((i * 0.382 + 0.17) % 1) * this.ancho
-      this.seta(x, suelo, 0.8 + ((i * 7) % 5) / 8, i % 3 === 0 ? '#c0392b' : '#c9a36b')
+      // Las mejoras de seta las hacen más grandes.
+      this.seta(x, suelo, (0.8 + ((i * 7) % 5) / 8) * (1 + asp.setaGrande * 0.2), i % 3 === 0 ? '#c0392b' : '#c9a36b')
     }
-    // Anillos de hadas: círculos de setas pequeñas.
+    // Flores (nodo del árbol) entre las setas.
+    if (asp.flores) {
+      for (let i = 0; i < 14; i++) {
+        const x = ((i * 0.236 + 0.05) % 1) * this.ancho
+        const osc = Math.sin(this.tiempo * 1.5 + i) * 1.5
+        this.ctx.strokeStyle = '#4f7a3a'
+        this.ctx.lineWidth = 1.2
+        this.ctx.beginPath()
+        this.ctx.moveTo(x, suelo)
+        this.ctx.lineTo(x + osc, suelo - 11)
+        this.ctx.stroke()
+        this.ctx.fillStyle = i % 3 === 0 ? '#ff8fb1' : i % 3 === 1 ? '#ffd166' : '#c9a7ff'
+        for (let p = 0; p < 5; p++) {
+          const ang = (p / 5) * Math.PI * 2
+          this.ctx.beginPath()
+          this.ctx.arc(x + osc + Math.cos(ang) * 2.6, suelo - 12 + Math.sin(ang) * 2.6, 1.6, 0, Math.PI * 2)
+          this.ctx.fill()
+        }
+      }
+    }
+    // Anillos de hadas: círculos de setas pequeñas; 'Anillo de anillos' añade un círculo exterior.
     const anillos = Math.min(4, Math.ceil(escala(j.cantidad('anillo'))))
     for (let a = 0; a < anillos; a++) {
       const cx = ((a * 0.27 + 0.62) % 1) * this.ancho
       for (let k = 0; k < 9; k++) {
         const ang = (k / 9) * Math.PI * 2
         this.seta(cx + Math.cos(ang) * 26, suelo - 2 + Math.sin(ang) * 6, 0.45, '#e8d9b5')
+        if (asp.anilloDoble) this.seta(cx + Math.cos(ang + 0.35) * 42, suelo - 2 + Math.sin(ang + 0.35) * 9, 0.35, '#f3ead3')
       }
     }
   }

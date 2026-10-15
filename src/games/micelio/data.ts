@@ -48,6 +48,36 @@ export const CONFIG: Config = {
   crecimientoCoste: 1.2,
   prestigio: { base: 1e11, bonus: 0.05 },
   maxOfflineSeg: 8 * 3600,
+  // Árbol permanente: se compra con trufas que dan las esporas. Tres ramas: lluvia, letargo y crecimiento.
+  arbol: {
+    fichaNombre: 'trufa',
+    fichaPlural: 'trufas',
+    fichaEmoji: '🟤',
+    nodos: [
+      { id: 'memoria', nombre: 'Memoria de la red', descripcion: 'El nuevo bosque recuerda el anterior: toda la producción +25 %.', emoji: '🧠', coste: 1, efecto: { tipo: 'global', mult: 1.25 } },
+      // Rama lluvia
+      { id: 'nubes_fieles', nombre: 'Nubes fieles', descripcion: 'La nube espera el doble antes de irse.', emoji: '☁️', coste: 2, requiere: ['memoria'], efecto: { tipo: 'desbloqueo', clave: 'nube_larga' } },
+      { id: 'rocio', nombre: 'Rocío', descripcion: 'Si la nube se va sin pincharla, cae rocío: la mitad del bonus de lluvia, sin hacer nada.', emoji: '💧', coste: 3, requiere: ['nubes_fieles'], efecto: { tipo: 'desbloqueo', clave: 'rocio' } },
+      { id: 'temporal', nombre: 'Temporal', descripcion: 'La lluvia dura el doble.', emoji: '🌊', coste: 4, requiere: ['rocio'], efecto: { tipo: 'desbloqueo', clave: 'lluvia_doble' } },
+      // Rama letargo
+      { id: 'letargo', nombre: 'Letargo', descripcion: 'El bosque sigue creciendo cuatro horas más mientras no miras.', emoji: '🌙', coste: 2, requiere: ['memoria'], efecto: { tipo: 'offline', horas: 4 } },
+      { id: 'hibernacion', nombre: 'Hibernación', descripcion: 'Ocho horas más de crecimiento mientras no miras.', emoji: '❄️', coste: 4, requiere: ['letargo'], efecto: { tipo: 'offline', horas: 8 } },
+      { id: 'cosecha', nombre: 'Cosecha de trufas', descripcion: 'Cada bosque nuevo deja un 50 % más de trufas.', emoji: '🧺', coste: 5, requiere: ['hibernacion'], efecto: { tipo: 'fichas', porcentaje: 0.5 } },
+      // Rama crecimiento
+      { id: 'viajeras', nombre: 'Esporas viajeras', descripcion: 'Cada bosque nace con diez hifas ya tejidas.', emoji: '🍃', coste: 2, requiere: ['memoria'], efecto: { tipo: 'arranque', edificio: 'hifa', cantidad: 10 } },
+      { id: 'semillero', nombre: 'Semillero', descripcion: 'Cada bosque nace con tres micelios.', emoji: '🌱', coste: 3, requiere: ['viajeras'], efecto: { tipo: 'arranque', edificio: 'micelio', cantidad: 3 } },
+      { id: 'trueque', nombre: 'Trueque con las raíces', descripcion: 'Todo lo que compras sale un 15 % más barato.', emoji: '🤝', coste: 3, requiere: ['viajeras'], efecto: { tipo: 'descuento', porcentaje: 0.15 } },
+      // Rama escena
+      { id: 'luz', nombre: 'Bioluminiscencia', descripcion: 'La red brilla en la oscuridad y los pulsos se ven desde lejos. Visible en el mapa.', emoji: '✨', coste: 2, requiere: ['memoria'], efecto: { tipo: 'desbloqueo', clave: 'luz' } },
+      { id: 'flores', nombre: 'Claro de flores', descripcion: 'Brotan flores entre las setas. Visible en el mapa.', emoji: '🌸', coste: 3, requiere: ['luz'], efecto: { tipo: 'desbloqueo', clave: 'flores' } },
+      { id: 'arbol_madre', nombre: 'Árbol madre', descripcion: 'Un árbol enorme preside el bosque: toda la producción +50 %. Visible en el mapa.', emoji: '🌳', coste: 6, requiere: ['semillero', 'flores'], efecto: { tipo: 'global', mult: 1.5 } },
+      // Tramo tardío: nodos caros para que las trufas sigan teniendo destino tras muchos bosques.
+      { id: 'raices_profundas', nombre: 'Raíces profundas', descripcion: 'Toda la producción x2.', emoji: '🪵', coste: 12, requiere: ['arbol_madre', 'temporal'], efecto: { tipo: 'global', mult: 2 } },
+      { id: 'red_mundial', nombre: 'Red mundial', descripcion: 'Toda la producción x2.', emoji: '🌐', coste: 25, requiere: ['raices_profundas', 'cosecha'], efecto: { tipo: 'global', mult: 2 } },
+      { id: 'cosecha_doble', nombre: 'Trufas negras', descripcion: 'Cada bosque nuevo deja el doble de trufas.', emoji: '⚫', coste: 40, requiere: ['red_mundial'], efecto: { tipo: 'fichas', porcentaje: 1 } },
+      { id: 'eternidad', nombre: 'Eternidad', descripcion: 'El bosque ya no olvida nada: toda la producción x3.', emoji: '♾️', coste: 80, requiere: ['cosecha_doble'], efecto: { tipo: 'global', mult: 3 } },
+    ],
+  },
 }
 
 /** Evento de lluvia: aparece cada cierto tiempo y, si se pincha, multiplica la producción. */
