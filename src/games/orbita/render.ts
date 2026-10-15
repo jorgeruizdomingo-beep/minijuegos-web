@@ -39,6 +39,14 @@ export class EscenaOrbita implements Escena {
   private ondas: Onda[] = []
   private rayo: THREE.Mesh
   private vidaRayo = 0
+  private supernova: THREE.Mesh
+  private vidaSupernova = 0
+  private vidas = -1
+  private cometa: THREE.Group
+  private vidaCometa = 0
+  private proximoCometa = 25
+  private origenCometa = new THREE.Vector3()
+  private destinoCometa = new THREE.Vector3()
   private tiempo = 0
   private pulso = 0
   private distancia = 9
@@ -91,6 +99,29 @@ export class EscenaOrbita implements Escena {
     this.rayo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
     this.rayo.visible = false
     this.scene.add(this.rayo)
+
+    // Supernova: una esfera luminosa que se expande desde la estrella al prestigiar.
+    this.supernova = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 24, 24),
+      new THREE.MeshBasicMaterial({ color: 0xfff1cc, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    )
+    this.supernova.position.copy(POS_ESTRELLA)
+    this.supernova.visible = false
+    this.scene.add(this.supernova)
+
+    // Cometa ocasional: cabeza brillante con cola, cruza la escena de vez en cuando (solo decorativo).
+    this.cometa = new THREE.Group()
+    const cabeza = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), new THREE.MeshBasicMaterial({ color: 0xdff6ff }))
+    const cola = new THREE.Mesh(
+      new THREE.ConeGeometry(0.09, 2.2, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    )
+    // El cono apunta hacia -Z (dirección de avance invertida): la cola queda detrás de la cabeza.
+    cola.rotation.x = -Math.PI / 2
+    cola.position.z = 1.1
+    this.cometa.add(cabeza, cola)
+    this.cometa.visible = false
+    this.scene.add(this.cometa)
 
     // Planeta y atmósfera
     const seg = this.movil ? 32 : 48
@@ -214,6 +245,14 @@ export class EscenaOrbita implements Escena {
   poblacion(_n: number) {
     const c = this.juego.estado.edificios
     this.cantidades = c
+    // Un prestigio nuevo (cambia el número de vidas) dispara la supernova.
+    const vidas = this.juego.estado.vidas
+    if (this.vidas >= 0 && vidas !== this.vidas) {
+      this.vidaSupernova = 1
+      this.supernova.visible = true
+      this.pulso = 1.5
+    }
+    this.vidas = vidas
     let radioExterior = APARIENCIAS.panel.radio
     for (const [id, capa] of this.capas) {
       const n = c[id] ?? 0
@@ -252,6 +291,29 @@ export class EscenaOrbita implements Escena {
     this.scene.remove(o.malla)
     o.malla.geometry.dispose()
     ;(o.malla.material as THREE.Material).dispose()
+  }
+
+  /** Cada 25-70 s cruza un cometa por detrás del planeta, de un lado a otro de la escena. */
+  private animarCometa(dt: number) {
+    if (this.vidaCometa <= 0) {
+      this.proximoCometa -= dt
+      if (this.proximoCometa > 0) return
+      this.proximoCometa = 25 + Math.random() * 45
+      this.vidaCometa = 1
+      const lado = Math.random() < 0.5 ? -1 : 1
+      const alto = -3 + Math.random() * 7
+      this.origenCometa.set(lado * 16, alto, -6 - Math.random() * 8)
+      this.destinoCometa.set(-lado * 16, alto - 2 + Math.random() * 4, -4 - Math.random() * 8)
+      this.cometa.position.copy(this.origenCometa)
+      this.cometa.lookAt(this.destinoCometa)
+      this.cometa.visible = true
+    }
+    this.vidaCometa -= dt / 6
+    if (this.vidaCometa <= 0) {
+      this.cometa.visible = false
+      return
+    }
+    this.cometa.position.lerpVectors(this.destinoCometa, this.origenCometa, this.vidaCometa)
   }
 
   /** Escala de una unidad según el tiempo desde que apareció: crece desde 0 con un pequeño rebote. */
@@ -334,6 +396,15 @@ export class EscenaOrbita implements Escena {
       ;(this.rayo.material as THREE.MeshBasicMaterial).opacity = this.vidaRayo * 0.85
       this.rayo.visible = this.vidaRayo > 0
     }
+    if (this.vidaSupernova > 0) {
+      this.vidaSupernova = Math.max(0, this.vidaSupernova - dt * 0.55)
+      const t = 1 - this.vidaSupernova
+      this.supernova.scale.setScalar(1 + t * 45)
+      ;(this.supernova.material as THREE.MeshBasicMaterial).opacity = this.vidaSupernova ** 1.5 * 0.9
+      this.luzEstrella.intensity = Math.max(this.luzEstrella.intensity, this.vidaSupernova * 200)
+      this.supernova.visible = this.vidaSupernova > 0
+    }
+    this.animarCometa(dt)
 
     // Cámara: se aleja suavemente según crece la órbita y lleva un vaivén lento.
     this.distancia += (this.distanciaObjetivo - this.distancia) * Math.min(1, dt * 1.5)
