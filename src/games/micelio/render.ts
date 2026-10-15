@@ -78,10 +78,40 @@ export class EscenaMicelio implements Escena {
     return this.alto * 0.36
   }
 
+  // Al estrenar un eslabón, una sola vez por navegador, se explica qué hace para el de abajo.
+  private static CLAVE_AVISOS = 'vjw:micelio:avisos'
+  private avisoCadena() {
+    let vistos: string[] = []
+    try {
+      vistos = JSON.parse(localStorage.getItem(EscenaMicelio.CLAVE_AVISOS) ?? '[]')
+    } catch {
+      vistos = []
+    }
+    const avisos: Record<string, string> = {
+      micelio: '🕸️ El micelio teje hifas solas: mira cómo sube el contador de 🧵 sin comprarlas.',
+      seta: '🍄 Cada seta extiende micelio, y ese micelio teje más hifas: la cadena se acelera.',
+      anillo: '⭕ Los anillos abren setas nuevas. Comprar arriba tarda en notarse, pero multiplica todo lo de abajo.',
+      bosque: '🌳 Los bosques brotan anillos. Desde aquí el crecimiento ya es imparable.',
+      red: '🌐 La red de raíces conecta bosques. Es el último eslabón: ahora toca soltar esporas y cosechar trufas.',
+    }
+    for (const id of Object.keys(avisos)) {
+      if (vistos.includes(id) || this.juego.compradas(id) < 1) continue
+      vistos.push(id)
+      toast(avisos[id], 7000)
+      try {
+        localStorage.setItem(EscenaMicelio.CLAVE_AVISOS, JSON.stringify(vistos))
+      } catch {
+        // sin almacenamiento: se repetirá, no pasa nada
+      }
+      break // uno por compra, para no apilar avisos
+    }
+  }
+
   /** El motor lo llama tras cargar, comprar, coger un nodo o soltar esporas. */
-  cambio() {
+  cambio(motivo: 'carga' | 'edificio' | 'mejora' | 'nodo' | 'prestigio' = 'carga') {
     const j = this.juego
     const a = this.aspecto
+    if (motivo === 'edificio') this.avisoCadena()
     a.luz = j.tieneDesbloqueo('luz')
     a.flores = j.tieneDesbloqueo('flores')
     a.arbolMadre = j.tieneNodo('arbol_madre')
@@ -479,7 +509,14 @@ export class EscenaMicelio implements Escena {
       ctx.fillStyle = '#8fd3ff'
       ctx.font = '700 13px system-ui, sans-serif'
       ctx.textAlign = 'left'
-      ctx.fillText(`🌧️ Lluvia x${this.multLluvia} · ${Math.ceil(l.resta)} s`, 10, 20)
+      ctx.fillText(`${l.rocio ? '💧 Rocío' : '🌧️ Lluvia'} x${this.juego.multiplicadorTemporal} · ${Math.ceil(l.resta)} s`, 10, 20)
+    } else if (l.fase === 'espera') {
+      // Cuenta atrás discreta: saber cuándo mirar es parte del juego.
+      const s = Math.max(0, Math.ceil(l.resta))
+      ctx.fillStyle = 'rgba(215, 222, 232, 0.55)'
+      ctx.font = '600 12px system-ui, sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText(`☁️ nube en ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, 10, 20)
     }
   }
 }
