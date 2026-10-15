@@ -18,14 +18,17 @@ const MEJORAS: Mejora[] = [
   { id: 'click_1', nombre: 'Llamarada guiada', descripcion: 'Cada clic genera el doble.', emoji: '🔥', coste: 100, condicion: { tipo: 'clicks', cantidad: 25 }, efecto: { tipo: 'click', mult: 2 } },
   { id: 'click_2', nombre: 'Eyección de masa', descripcion: 'Cada clic genera el doble.', emoji: '💥', coste: 2_500, condicion: { tipo: 'clicks', cantidad: 150 }, efecto: { tipo: 'click', mult: 2 } },
   { id: 'click_3', nombre: 'Lente gravitatoria', descripcion: 'Cada clic genera el doble.', emoji: '🔭', coste: 50_000, condicion: { tipo: 'clicks', cantidad: 500 }, efecto: { tipo: 'click', mult: 2 } },
-  { id: 'click_prod_1', nombre: 'Resonancia orbital', descripcion: 'Cada clic añade un 1% de tu producción por segundo.', emoji: '🎯', coste: 500_000, condicion: { tipo: 'clicks', cantidad: 1_000 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.01 } },
-  { id: 'click_prod_2', nombre: 'Pulso coherente', descripcion: 'Cada clic añade otro 1% de tu producción por segundo.', emoji: '🌀', coste: 50_000_000, condicion: { tipo: 'clicks', cantidad: 3_000 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.01 } },
+  { id: 'click_prod_1', nombre: 'Resonancia orbital', descripcion: 'Cada clic añade un 1% de tu producción por segundo.', emoji: '🎯', coste: 50_000, condicion: { tipo: 'clicks', cantidad: 300 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.01 } },
+  { id: 'click_prod_2', nombre: 'Pulso coherente', descripcion: 'Cada clic añade otro 2% de tu producción por segundo.', emoji: '🌀', coste: 5_000_000, condicion: { tipo: 'clicks', cantidad: 1_000 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.02 } },
+  { id: 'click_prod_3', nombre: 'Tormenta coronal', descripcion: 'Cada clic añade otro 3% de tu producción por segundo.', emoji: '🌪️', coste: 500_000_000, condicion: { tipo: 'clicks', cantidad: 3_000 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.03 } },
 
   // Globales
   { id: 'global_1', nombre: 'Superconductores', descripcion: 'Toda la producción +10%.', emoji: '🧲', coste: 10_000, condicion: { tipo: 'total', cantidad: 5_000 }, efecto: { tipo: 'global', mult: 1.1 } },
   { id: 'global_2', nombre: 'Red de microondas', descripcion: 'Toda la producción +15%.', emoji: '📶', coste: 1_000_000, condicion: { tipo: 'total', cantidad: 500_000 }, efecto: { tipo: 'global', mult: 1.15 } },
   { id: 'global_3', nombre: 'IA de control orbital', descripcion: 'Toda la producción +20%.', emoji: '🤖', coste: 100_000_000, condicion: { tipo: 'total', cantidad: 50_000_000 }, efecto: { tipo: 'global', mult: 1.2 } },
   { id: 'global_4', nombre: 'Fusión aneutrónica', descripcion: 'Toda la producción +25%.', emoji: '⚛️', coste: 10_000_000_000, condicion: { tipo: 'total', cantidad: 5_000_000_000 }, efecto: { tipo: 'global', mult: 1.25 } },
+  { id: 'global_5', nombre: 'Agujero de gusano', descripcion: 'Toda la producción +30%.', emoji: '🕳️', coste: 1_000_000_000_000, condicion: { tipo: 'total', cantidad: 500_000_000_000 }, efecto: { tipo: 'global', mult: 1.3 } },
+  { id: 'global_6', nombre: 'Motor estelar', descripcion: 'Toda la producción +50%.', emoji: '🚀', coste: 100_000_000_000_000, condicion: { tipo: 'total', cantidad: 50_000_000_000_000 }, efecto: { tipo: 'global', mult: 1.5 } },
 
   // Por edificio
   ...mejorasDeEdificio(EDIFICIOS[0], ['Células de perovskita', 'Paneles plegables', 'Seguimiento solar']),
@@ -37,7 +40,18 @@ const MEJORAS: Mejora[] = [
   ...mejorasDeEdificio(EDIFICIOS[6], ['Espejos adaptativos', 'Anillo cerrado', 'Foco estelar']),
   ...mejorasDeEdificio(EDIFICIOS[7], ['Velas de grafeno', 'Velas en tándem', 'Flota de colectores']),
   ...mejorasDeEdificio(EDIFICIOS[8], ['Segmentos enlazados', 'Media cáscara', 'Esfera completa']),
+
+  // Fase tardía: con 100 y 200 unidades de un edificio, dos saltos más (x2 y x3).
+  ...EDIFICIOS.flatMap((e) => mejorasTardias(e)),
 ]
+
+/** Mejoras de fase tardía de un edificio: x2 con 100 unidades y x3 con 200. */
+function mejorasTardias(e: Edificio): Mejora[] {
+  return [
+    { id: `${e.id}_4`, nombre: `${e.nombre}: producción en serie`, descripcion: `${e.nombre}: producción x2.`, emoji: e.emoji, coste: e.costeBase * 5_000, condicion: { tipo: 'edificio', id: e.id, cantidad: 100 }, efecto: { tipo: 'edificio', id: e.id, mult: 2 } },
+    { id: `${e.id}_5`, nombre: `${e.nombre}: diseño definitivo`, descripcion: `${e.nombre}: producción x3.`, emoji: e.emoji, coste: e.costeBase * 100_000, condicion: { tipo: 'edificio', id: e.id, cantidad: 200 }, efecto: { tipo: 'edificio', id: e.id, mult: 3 } },
+  ]
+}
 
 export const CONFIG: Config = {
   claveGuardado: 'orbita',
@@ -45,7 +59,7 @@ export const CONFIG: Config = {
   edificios: EDIFICIOS,
   mejoras: MEJORAS,
   crecimientoCoste: 1.15,
-  prestigio: { base: 10_000_000, bonus: 0.05 },
+  prestigio: { base: 1_000_000, bonus: 0.1 },
   maxOfflineSeg: 8 * 3600,
 }
 
@@ -72,13 +86,13 @@ export type Apariencia = {
 }
 
 export const APARIENCIAS: Record<string, Apariencia> = {
-  panel: { radio: 2.0, tamano: 0.1, color: 0x4fa3ff, velocidad: 0.9, inclinacion: 0.1, forma: 'panel' },
-  sonda: { radio: 2.5, tamano: 0.09, color: 0xdddddd, velocidad: 0.7, inclinacion: 0.35, forma: 'esfera' },
-  rele: { radio: 3.0, tamano: 0.13, color: 0xffc857, velocidad: 0.55, inclinacion: -0.25, forma: 'cubo' },
-  estacion: { radio: 3.5, tamano: 0.2, color: 0xb0b8c8, velocidad: 0.45, inclinacion: 0.6, forma: 'toro' },
-  minero: { radio: 4.1, tamano: 0.16, color: 0x9a7b5a, velocidad: 0.35, inclinacion: -0.5, forma: 'roca' },
-  luna: { radio: 4.8, tamano: 0.32, color: 0xe8e4d8, velocidad: 0.25, inclinacion: 0.2, forma: 'esfera' },
-  espejos: { radio: 5.5, tamano: 0.18, color: 0xc9f0ff, velocidad: 0.2, inclinacion: 0.9, forma: 'panel' },
-  colector: { radio: 6.3, tamano: 0.4, color: 0xffa54f, velocidad: 0.15, inclinacion: -0.7, forma: 'vela' },
-  dyson: { radio: 7.2, tamano: 0.6, color: 0xff6b3d, velocidad: 0.1, inclinacion: 0.15, forma: 'segmento' },
+  panel: { radio: 2.0, tamano: 0.07, color: 0x4fa3ff, velocidad: 0.9, inclinacion: 0.1, forma: 'panel' },
+  sonda: { radio: 2.6, tamano: 0.06, color: 0xdddddd, velocidad: 0.7, inclinacion: 0.4, forma: 'esfera' },
+  rele: { radio: 3.2, tamano: 0.09, color: 0xffc857, velocidad: 0.55, inclinacion: -0.3, forma: 'cubo' },
+  estacion: { radio: 3.8, tamano: 0.13, color: 0xb0b8c8, velocidad: 0.45, inclinacion: 0.65, forma: 'toro' },
+  minero: { radio: 4.5, tamano: 0.11, color: 0x9a7b5a, velocidad: 0.35, inclinacion: -0.55, forma: 'roca' },
+  luna: { radio: 5.3, tamano: 0.2, color: 0xe8e4d8, velocidad: 0.25, inclinacion: 0.2, forma: 'esfera' },
+  espejos: { radio: 6.1, tamano: 0.12, color: 0xc9f0ff, velocidad: 0.2, inclinacion: 0.95, forma: 'panel' },
+  colector: { radio: 7.0, tamano: 0.2, color: 0xffa54f, velocidad: 0.15, inclinacion: -0.75, forma: 'vela' },
+  dyson: { radio: 8.0, tamano: 0.45, color: 0xff6b3d, velocidad: 0.1, inclinacion: 0.15, forma: 'segmento' },
 }
