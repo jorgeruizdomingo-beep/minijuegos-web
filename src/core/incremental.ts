@@ -118,6 +118,43 @@ export type Estado = {
   nodos?: string[]
 }
 
+const esNumero = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const esTexto = (v: unknown): v is string => typeof v === 'string'
+
+/** Devuelve el objeto solo con las entradas cuyo valor es un número finito; cualquier otra cosa, vacío. */
+function sanearConteo(v: unknown): Record<string, number> | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter((par): par is [string, number] => esNumero(par[1])))
+}
+
+function sanearLista(v: unknown): string[] | undefined {
+  return Array.isArray(v) ? v.filter(esTexto) : undefined
+}
+
+/**
+ * Valida la forma de cada campo de un guardado y descarta los que no cuadran
+ * (un import corrupto, un guardado editado a mano). Un campo inválido equivale a
+ * uno ausente: `cargar` lo rellena con el valor inicial. Nunca lanza.
+ */
+export function sanearGuardado(data: unknown): Partial<Estado> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {}
+  const d = data as Record<string, unknown>
+  const limpio: Partial<Estado> = {}
+  for (const k of ['recurso', 'total', 'historico', 'clicks', 'prestigio', 'vidas', 'inicio', 'fichas'] as const) {
+    if (esNumero(d[k])) limpio[k] = d[k]
+  }
+  const edificios = sanearConteo(d.edificios)
+  if (edificios) limpio.edificios = edificios
+  const comprados = sanearConteo(d.comprados)
+  if (comprados) limpio.comprados = comprados
+  const mejoras = sanearLista(d.mejoras)
+  if (mejoras) limpio.mejoras = mejoras
+  const nodos = sanearLista(d.nodos)
+  if (nodos) limpio.nodos = nodos
+  else if (d.nodos !== undefined) limpio.nodos = [] // forma inválida: no es una partida anterior al árbol
+  return limpio
+}
+
 /** Genera las tres mejoras estándar de un edificio (x2 al llegar a 1, 10 y 50). */
 export function mejorasDeEdificio(e: Edificio, nombres: [string, string, string]): Mejora[] {
   const umbrales = [1, 10, 50]
@@ -505,6 +542,7 @@ export class Incremental {
   }
 
   /** Carga el guardado (si existe) y abona el progreso offline. */
+  /** Carga la partida guardada (si la hay) y aplica migraciones. `preparar` se llama antes de abonar el tiempo fuera. */
   static cargar(config: Config, preparar?: (j: Incremental) => void): { juego: Incremental; offline: { recurso: number; segundos: number } | null } {
     const g = cargar<Estado>(config.claveGuardado, config.versionGuardado)
     const vacio = new Incremental(config)
@@ -512,18 +550,21 @@ export class Incremental {
       preparar?.(vacio)
       return { juego: vacio, offline: null }
     }
+    // Un guardado importado o editado puede traer campos con la forma equivocada:
+    // se descarta campo a campo (nunca la partida entera) para que el juego siempre arranque.
+    const datos = sanearGuardado(g.data)
     // Rellena campos que puedan faltar en guardados antiguos. Sin cadenas, todo lo que hay se compró.
     const estado: Estado = {
       ...vacio.estadoInicial(),
-      ...g.data,
-      edificios: { ...vacio.estadoInicial().edificios, ...g.data.edificios },
-      comprados: g.data.comprados ?? { ...g.data.edificios },
+      ...datos,
+      edificios: { ...vacio.estadoInicial().edificios, ...datos.edificios },
+      comprados: datos.comprados ?? { ...datos.edificios },
     }
     const juego = new Incremental(config, estado)
     // Partidas anteriores al árbol: se abonan las fichas que habrían dado sus reinicios.
-    if (config.arbol && g.data.nodos === undefined) {
+    if (config.arbol && datos.nodos === undefined) {
       estado.nodos = []
-      estado.fichas = (g.data.fichas ?? 0) + (estado.prestigio > 0 ? juego.fichasPor(estado.prestigio) : 0)
+      estado.fichas = (datos.fichas ?? 0) + (estado.prestigio > 0 ? juego.fichasPor(estado.prestigio) : 0)
     }
     juego.aplicarArranque() // nodos de arranque comprados en otra sesión o dispositivo
     preparar?.(juego) // p. ej. fijar bonus por logros antes de abonar el tiempo fuera
