@@ -61,6 +61,8 @@ export const CONFIG: Config = {
   crecimientoCoste: 1.15,
   prestigio: { base: 1_000_000, bonus: 0.1 },
   maxOfflineSeg: 8 * 3600,
+  // Evento sorpresa del motor. Se llama "tormenta" y no "llamarada" para no confundirlo con el clic.
+  evento: { nombre: 'Tormenta solar', emoji: '🌞', esperaMinSeg: 120, esperaMaxSeg: 240, visibleSeg: 12, duracionSeg: 30, mult: 7 },
 }
 
 export const TEXTOS: Textos = {
