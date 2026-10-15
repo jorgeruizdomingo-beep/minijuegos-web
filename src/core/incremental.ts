@@ -57,7 +57,7 @@ export type Estado = {
   historico: number // en todas las vidas
   clicks: number
   edificios: Record<string, number>
-  /** Unidades compradas (las generadas por una cadena no cuentan). Si falta un id, vale `edificios`. */
+  /** Unidades compradas (las generadas por una cadena no cuentan). Un id ausente vale 0. */
   comprados?: Record<string, number>
   mejoras: string[]
   prestigio: number
@@ -142,7 +142,7 @@ export class Incremental {
 
   /** Unidades compradas de un edificio (sin las generadas por cadenas). */
   compradas(idEdificio: string): number {
-    return this.estado.comprados?.[idEdificio] ?? this.cantidad(idEdificio)
+    return this.estado.comprados?.[idEdificio] ?? 0
   }
 
   totalEdificios(): number {
@@ -260,8 +260,9 @@ export class Incremental {
     const coste = this.costeEdificio(idEdificio, cantidad)
     if (cantidad <= 0 || this.estado.recurso < coste) return false
     this.estado.recurso -= coste
+    const previas = this.compradas(idEdificio)
     this.estado.edificios[idEdificio] = this.cantidad(idEdificio) + cantidad
-    this.estado.comprados = { ...this.estado.comprados, [idEdificio]: this.compradas(idEdificio) + cantidad }
+    this.estado.comprados = { ...this.estado.comprados, [idEdificio]: previas + cantidad }
     return true
   }
 
@@ -312,8 +313,13 @@ export class Incremental {
     const g = cargar<Estado>(config.claveGuardado, config.versionGuardado)
     const vacio = new Incremental(config)
     if (!g) return { juego: vacio, offline: null }
-    // Rellena campos que puedan faltar en guardados antiguos.
-    const estado: Estado = { ...vacio.estadoInicial(), ...g.data, edificios: { ...vacio.estadoInicial().edificios, ...g.data.edificios }, comprados: { ...g.data.comprados } }
+    // Rellena campos que puedan faltar en guardados antiguos. Sin cadenas, todo lo que hay se compró.
+    const estado: Estado = {
+      ...vacio.estadoInicial(),
+      ...g.data,
+      edificios: { ...vacio.estadoInicial().edificios, ...g.data.edificios },
+      comprados: g.data.comprados ?? { ...g.data.edificios },
+    }
     const juego = new Incremental(config, estado)
     const offline = g.elapsedSec > 5 ? juego.progresoOffline(g.elapsedSec) : null
     return { juego, offline }
