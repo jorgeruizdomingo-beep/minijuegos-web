@@ -47,7 +47,7 @@ export const CONFIG: Config = {
 export const LLUVIA = {
   esperaMinSeg: 120,
   esperaMaxSeg: 240,
-  visibleSeg: 15, // tiempo que la nube espera a que la pinches
+  visibleSeg: 20, // tiempo que la nube espera a que la pinches
   duracionSeg: 30,
   mult: 3,
 }

@@ -5,6 +5,7 @@
  */
 import type { Escena } from '../../core/arranque'
 import { toast } from '../../core/arranque'
+import { sonidos } from '../../core/sonido'
 import type { Incremental } from '../../core/incremental'
 import { LLUVIA } from './data'
 
@@ -106,7 +107,7 @@ export class EscenaMicelio implements Escena {
     if (this.lluvia.fase === 'nube') {
       const cx = this.lluvia.x * this.ancho
       const cy = this.alto * 0.12 + 6
-      if (Math.hypot(x - cx, y - cy) < 56) {
+      if (Math.hypot(x - cx, y - cy) < 64) {
         this.empezarLluvia()
         return
       }
@@ -124,6 +125,7 @@ export class EscenaMicelio implements Escena {
     this.lluvia.fase = 'lloviendo'
     this.lluvia.resta = LLUVIA.duracionSeg
     this.juego.multiplicadorTemporal = LLUVIA.mult
+    sonidos.mejora()
     toast(`🌧️ ¡Lluvia! Producción x${LLUVIA.mult} durante ${LLUVIA.duracionSeg} s`, 3000)
   }
 
@@ -313,10 +315,16 @@ export class EscenaMicelio implements Escena {
         ctx.fill()
       }
       ctx.restore()
+      // Anillo que se vacía: cuánto queda antes de que la nube se vaya.
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.arc(cx, cy + 2, 34, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * l.resta) / LLUVIA.visibleSeg)
+      ctx.stroke()
       ctx.fillStyle = '#ffffff'
       ctx.font = '600 12px system-ui, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(`¡Pínchala! x${LLUVIA.mult}`, cx, cy + 40)
+      ctx.fillText(`¡Pínchala! x${LLUVIA.mult}`, cx, cy + 52)
     }
     if (l.fase === 'lloviendo') {
       while (this.gotas.length < 90) this.gotas.push({ x: Math.random() * ancho, y: Math.random() * alto, v: 300 + Math.random() * 200 })

@@ -1,3 +1,19 @@
 .escena {
   background: linear-gradient(#1a2b2a 0%, #2b3b2e 36%, #3a2b1f 36%, #140f0b 100%);
 }
+
+/* Tira de la cadena de producción, bajo el contador. */
+.cadena {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 2px 6px;
+  font-size: 13px;
+  margin: -4px 0 8px;
+  min-height: 20px;
+}
+.cadena__eslabon { white-space: nowrap; }
+.cadena__eslabon b { color: var(--text); font-weight: 600; }
+.cadena__eslabon small { font-size: 11px; color: var(--ok); }
+.cadena__flecha { opacity: 0.5; }

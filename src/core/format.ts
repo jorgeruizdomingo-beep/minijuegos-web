@@ -5,7 +5,9 @@ export function fmt(n: number): string {
   if (!Number.isFinite(n)) return '∞'
   if (n < 0) return '-' + fmt(-n)
   if (n < 1000) return n < 10 && n !== Math.floor(n) ? n.toFixed(1) : Math.floor(n).toString()
-  const exp = Math.min(Math.floor(Math.log10(n) / 3), SUFIJOS.length - 1)
+  const exp = Math.floor(Math.log10(n) / 3)
+  // Más allá del último sufijo, notación científica: "1,23e40".
+  if (exp >= SUFIJOS.length) return n.toExponential(2).replace('.', ',').replace('e+', 'e')
   const mant = n / 10 ** (exp * 3)
   return mant.toFixed(mant < 10 ? 2 : mant < 100 ? 1 : 0).replace('.', ',') + SUFIJOS[exp]
 }

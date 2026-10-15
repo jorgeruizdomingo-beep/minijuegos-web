@@ -153,4 +153,5 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
   }
   ui.refrescar()
   requestAnimationFrame(bucle)
+  return { juego, ui, escena }
 }
