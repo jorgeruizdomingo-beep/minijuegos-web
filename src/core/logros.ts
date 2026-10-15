@@ -20,6 +20,9 @@ export type TextosLogros = {
   prestigioVida: string // "colonia"
 }
 
+/** Cada logro desbloqueado suma este porcentaje a la producción (0.01 = +1 %). */
+export const BONUS_POR_LOGRO = 0.01
+
 const HITOS_EDIFICIO = [1, 10, 25, 50, 100]
 const HITOS_TOTAL = [100, 10_000, 1_000_000, 100_000_000, 10_000_000_000, 1_000_000_000_000]
 const HITOS_CLICKS = [1, 100, 1_000, 10_000]
@@ -138,6 +141,11 @@ export class Logros {
     return this.desbloqueados.size
   }
 
+  /** Bonus de producción acumulado (0.12 = +12 %). */
+  get bonus(): number {
+    return this.cuenta * BONUS_POR_LOGRO
+  }
+
   /** Comprueba las condiciones y devuelve los logros recién desbloqueados. */
   comprobar(): Logro[] {
     const nuevos: Logro[] = []
@@ -166,6 +174,7 @@ export class Logros {
           </div>`
       })
       .join('')
-    return `<p class="muted">${this.cuenta} de ${this.lista.length} desbloqueados.</p><div class="logros">${filas}</div>`
+    const pct = Math.round(this.bonus * 100)
+    return `<p class="muted">${this.cuenta} de ${this.lista.length} desbloqueados · <strong>+${pct}% de producción</strong> (cada logro suma un ${Math.round(BONUS_POR_LOGRO * 100)} %, y no se pierde con el prestigio).</p><div class="logros">${filas}</div>`
   }
 }

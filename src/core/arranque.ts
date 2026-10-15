@@ -10,6 +10,7 @@ import { Logros } from './logros'
 import { activarAudio, alternarSilencio, estaSilenciado, sonidos } from './sonido'
 import { abrirPanelPortar } from './portar'
 import { abrirModal } from './modal'
+import { iniciarEvento, type Evento } from './evento'
 
 export type Escena = {
   /** Ajusta la escena al tamaño de la "población" (edificios totales). */
@@ -35,8 +36,12 @@ export function toast(texto: string, ms = 4000, clase = '') {
 
 export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: HTMLCanvasElement, juego: Incremental) => Escena) {
   const raiz = document.getElementById('juego')!
-  const { juego, offline } = Incremental.cargar(config)
-  const logros = new Logros(juego, textos)
+  let logros!: Logros
+  // Los logros se leen antes de abonar el tiempo fuera para que su bonus cuente también offline.
+  const { juego, offline } = Incremental.cargar(config, (j) => {
+    logros = new Logros(j, textos)
+    j.bonusLogros = logros.bonus
+  })
   let escena: Escena
 
   const ui = new UIIncremental(raiz, juego, textos, {
@@ -73,6 +78,15 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
   })
 
   escena = crearEscena(ui.canvas, juego)
+
+  let evento: Evento | null = null
+  if (config.evento) {
+    evento = iniciarEvento(config.evento, juego, ui.canvas.parentElement!, (ev) => {
+      sonidos.logro()
+      toast(`${ev.emoji} ¡${ev.nombre}! Producción x${ev.mult} durante ${ev.duracionSeg} s`, 3000)
+      ui.refrescar()
+    })
+  }
 
   if (offline && offline.recurso >= 1) {
     toast(`Mientras no estabas (${fmtDuration(offline.segundos)}) se produjeron ${fmt(offline.recurso)} ${textos.recurso}.`, 7000)
@@ -134,6 +148,7 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
   function bucle(ahora: number) {
     const dt = Math.min(1, (ahora - ultimo) / 1000)
     ultimo = ahora
+    evento?.tick(dt)
     juego.tick(dt)
     escena.poblacion(juego.totalEdificios())
     escena.frame(dt)
@@ -148,6 +163,7 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
       acumLogros = 0
       const nuevos = logros.comprobar()
       if (nuevos.length) {
+        juego.bonusLogros = logros.bonus
         sonidos.logro()
         // Varios a la vez (partida cargada, vuelta tras horas): un solo aviso en vez de una pila.
         if (nuevos.length > 2) {
