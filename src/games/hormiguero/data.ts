@@ -145,19 +145,40 @@ export const CONFIG: Config = {
   maxOfflineSeg: 8 * 3600,
   // Miga dorada: cada 2-4 minutos aparece sobre la escena; si la pinchas, x7 durante 30 s.
   evento: { nombre: 'Miga dorada', emoji: '🍪', esperaMinSeg: 120, esperaMaxSeg: 240, visibleSeg: 12, duracionSeg: 30, mult: 7 },
-  // Árbol permanente de ejemplo (el definitivo lo diseña el hilo de Hormiguero).
-  // Las fichas son ámbar: cada fundación de colonia da 1 + ⌊√feromonas ganadas⌋.
+  // Árbol permanente: se paga con ámbar, que da cada fundación de colonia
+  // (1 + ⌊log2(feromonas ganadas + 1)⌋: crece despacio aunque las feromonas se disparen). Tres ramas: Cría (arranque y producción),
+  // Comercio (descuentos y clic) y Saber (tiempo fuera, ámbar y el nido visible).
   arbol: {
     fichaNombre: 'ámbar',
     fichaPlural: 'ámbares',
     fichaEmoji: '🟠',
+    fichasPorReinicio: (ganados) => 1 + Math.floor(Math.log2(ganados + 1)),
     nodos: [
-      { id: 'memoria', nombre: 'Memoria de la colonia', descripcion: 'Las nuevas reinas recuerdan dónde estaba la mesa.', emoji: '🧠', coste: 1, efecto: { tipo: 'global', mult: 1.25 } },
-      { id: 'huevos', nombre: 'Huevos de reserva', descripcion: 'Cada colonia nace con cinco obreras ya criadas.', emoji: '🥚', coste: 2, requiere: ['memoria'], efecto: { tipo: 'arranque', edificio: 'obrera', cantidad: 5 } },
+      // Raíz
+      { id: 'memoria', nombre: 'Memoria de la colonia', descripcion: 'Las nuevas reinas recuerdan dónde estaba la mesa. Producción x1,25.', emoji: '🧠', coste: 1, efecto: { tipo: 'global', mult: 1.25 } },
+
+      // Rama Cría: cada colonia nueva nace con ventaja
+      { id: 'huevos', nombre: 'Huevos de reserva', descripcion: 'Cada colonia nace con diez obreras ya criadas.', emoji: '🥚', coste: 2, requiere: ['memoria'], efecto: { tipo: 'arranque', edificio: 'obrera', cantidad: 10 } },
+      { id: 'nodrizas', nombre: 'Nodrizas', descripcion: 'Cada colonia nace con cinco exploradoras.', emoji: '🍼', coste: 4, requiere: ['huevos'], efecto: { tipo: 'arranque', edificio: 'exploradora', cantidad: 5 } },
+      { id: 'dinastia', nombre: 'Dinastía', descripcion: 'La estirpe de reinas mejora con cada generación. Producción x1,5.', emoji: '👑', coste: 10, requiere: ['nodrizas'], efecto: { tipo: 'global', mult: 1.5 } },
+      { id: 'estandarte', nombre: 'Estandarte', descripcion: 'La colonia iza un banderín junto a la entrada. Visible en el mapa.', emoji: '🚩', coste: 3, requiere: ['huevos'], efecto: { tipo: 'desbloqueo', clave: 'estandarte' } },
+
+      // Rama Comercio: comprar sale más barato y el clic vale más
       { id: 'regateo', nombre: 'Regateo con pulgones', descripcion: 'Todo lo que compras sale un 10 % más barato.', emoji: '🤝', coste: 2, requiere: ['memoria'], efecto: { tipo: 'descuento', porcentaje: 0.1 } },
-      { id: 'estandarte', nombre: 'Estandarte', descripcion: 'La colonia iza un estandarte en el nido. Visible en el mapa.', emoji: '🚩', coste: 3, requiere: ['huevos'], efecto: { tipo: 'desbloqueo', clave: 'estandarte' } },
-      { id: 'sueno', nombre: 'Sueño ligero', descripcion: 'La colonia sigue trabajando cuatro horas más mientras no miras.', emoji: '🌙', coste: 3, requiere: ['regateo'], efecto: { tipo: 'offline', horas: 4 } },
-      { id: 'abundancia', nombre: 'Abundancia', descripcion: 'Cada fundación deja un 50 % más de ámbar.', emoji: '💎', coste: 4, requiere: ['estandarte', 'sueno'], efecto: { tipo: 'fichas', porcentaje: 0.5 } },
+      { id: 'mandibulas', nombre: 'Mandíbulas de ámbar', descripcion: 'Cada clic recoge el triple.', emoji: '💎', coste: 4, requiere: ['regateo'], efecto: { tipo: 'click', mult: 3 } },
+      { id: 'mercado', nombre: 'Mercado de migas', descripcion: 'Otro 10 % de descuento en todo lo que compras.', emoji: '🏪', coste: 8, requiere: ['regateo'], efecto: { tipo: 'descuento', porcentaje: 0.1 } },
+      { id: 'trueque', nombre: 'Trueque universal', descripcion: 'Otro 15 % de descuento: más de un tercio menos en total.', emoji: '⚖️', coste: 15, requiere: ['mercado'], efecto: { tipo: 'descuento', porcentaje: 0.15 } },
+      { id: 'empedrado', nombre: 'Camino empedrado', descripcion: 'Las obreras pavimentan el rastro con piedrecitas. Visible en el mapa.', emoji: '🪨', coste: 5, requiere: ['mercado'], efecto: { tipo: 'desbloqueo', clave: 'empedrado' } },
+
+      // Rama Saber: trabajar sin ti y recordar más
+      { id: 'sueno', nombre: 'Sueño ligero', descripcion: 'La colonia sigue trabajando cuatro horas más mientras no miras.', emoji: '🌙', coste: 3, requiere: ['memoria'], efecto: { tipo: 'offline', horas: 4 } },
+      { id: 'jardin', nombre: 'Jardín real', descripcion: 'Flores alrededor del nido, con abejas de visita. Visible en el mapa.', emoji: '🌸', coste: 5, requiere: ['sueno'], efecto: { tipo: 'desbloqueo', clave: 'jardin' } },
+      { id: 'abundancia', nombre: 'Abundancia', descripcion: 'Cada fundación deja un 50 % más de ámbar.', emoji: '🟠', coste: 6, requiere: ['sueno'], efecto: { tipo: 'fichas', porcentaje: 0.5 } },
+      { id: 'faro', nombre: 'Farolillo de resina', descripcion: 'Una luz en el nido que alumbra el rastro de noche. Visible en el mapa.', emoji: '🏮', coste: 8, requiere: ['jardin'], efecto: { tipo: 'desbloqueo', clave: 'faro' } },
+      { id: 'hibernacion', nombre: 'Hibernación', descripcion: 'La colonia sigue trabajando doce horas más mientras no miras.', emoji: '❄️', coste: 12, requiere: ['abundancia'], efecto: { tipo: 'offline', horas: 12 } },
+
+      // Cima: requiere las tres ramas
+      { id: 'ancestral', nombre: 'Mente ancestral', descripcion: 'Todas las colonias que fueron piensan con la de ahora. Producción x2.', emoji: '🌌', coste: 30, requiere: ['dinastia', 'trueque', 'hibernacion'], efecto: { tipo: 'global', mult: 2 } },
     ],
   },
 }
