@@ -123,13 +123,13 @@ export type Apariencia = {
 }
 
 export const APARIENCIAS: Record<string, Apariencia> = {
-  panel: { radio: 2.0, tamano: 0.07, color: 0x4fa3ff, velocidad: 0.9, inclinacion: 0.1, forma: 'panel' },
-  sonda: { radio: 2.6, tamano: 0.06, color: 0xdddddd, velocidad: 0.7, inclinacion: 0.4, forma: 'esfera' },
-  rele: { radio: 3.2, tamano: 0.09, color: 0xffc857, velocidad: 0.55, inclinacion: -0.3, forma: 'cubo' },
-  estacion: { radio: 3.8, tamano: 0.13, color: 0xb0b8c8, velocidad: 0.45, inclinacion: 0.65, forma: 'toro' },
-  minero: { radio: 4.5, tamano: 0.11, color: 0x9a7b5a, velocidad: 0.35, inclinacion: -0.55, forma: 'roca' },
+  panel: { radio: 2.0, tamano: 0.11, color: 0x4fa3ff, velocidad: 0.9, inclinacion: 0.1, forma: 'panel' },
+  sonda: { radio: 2.6, tamano: 0.1, color: 0xdddddd, velocidad: 0.7, inclinacion: 0.4, forma: 'esfera' },
+  rele: { radio: 3.2, tamano: 0.12, color: 0xffc857, velocidad: 0.55, inclinacion: -0.3, forma: 'cubo' },
+  estacion: { radio: 3.8, tamano: 0.18, color: 0xb0b8c8, velocidad: 0.45, inclinacion: 0.65, forma: 'toro' },
+  minero: { radio: 4.5, tamano: 0.15, color: 0x9a7b5a, velocidad: 0.35, inclinacion: -0.55, forma: 'roca' },
   luna: { radio: 5.3, tamano: 0.2, color: 0xe8e4d8, velocidad: 0.25, inclinacion: 0.2, forma: 'esfera' },
-  espejos: { radio: 6.1, tamano: 0.12, color: 0xc9f0ff, velocidad: 0.2, inclinacion: 0.95, forma: 'panel' },
-  colector: { radio: 7.0, tamano: 0.16, color: 0xffa54f, velocidad: 0.15, inclinacion: -0.75, forma: 'vela' },
-  dyson: { radio: 2.4, tamano: 0.75, color: 0xff6b3d, velocidad: 0.12, inclinacion: 0.3, forma: 'segmento' },
+  espejos: { radio: 6.1, tamano: 0.17, color: 0xc9f0ff, velocidad: 0.2, inclinacion: 0.95, forma: 'panel' },
+  colector: { radio: 7.0, tamano: 0.24, color: 0xffa54f, velocidad: 0.15, inclinacion: -0.75, forma: 'vela' },
+  dyson: { radio: 2.4, tamano: 0.9, color: 0xff6b3d, velocidad: 0.12, inclinacion: 0.3, forma: 'segmento' },
 }

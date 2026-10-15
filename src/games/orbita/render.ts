@@ -6,7 +6,9 @@
 import * as THREE from 'three'
 import type { Escena } from '../../core/arranque'
 import type { Incremental } from '../../core/incremental'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { APARIENCIAS, CONFIG, type Apariencia } from './data'
+import { atlas, modelo, texturasPlaneta } from './modelos'
 
 /** Objetos dibujados por tipo; a partir de ahí crecen un poco en vez de multiplicarse. */
 const MAX_POR_TIPO = 28
@@ -63,8 +65,10 @@ export class EscenaOrbita implements Escena {
   private fondo: THREE.Points
   private sol: THREE.DirectionalLight
   private nucleo: THREE.Mesh
-  private matTierra: THREE.MeshStandardMaterial
-  private tierra: THREE.Group
+  private matPlaneta: THREE.MeshStandardMaterial
+  private matModelos: THREE.MeshStandardMaterial
+  private brilloCiudades = 0.35
+  private estrellaLocal = new THREE.Vector3()
   private escalaEstrella = 7
   private opacidadAtmosfera = 0.18
 
@@ -76,26 +80,38 @@ export class EscenaOrbita implements Escena {
     this.movil = dpr > 1.5 || window.innerWidth < 820
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !this.movil, alpha: true, powerPreference: 'low-power' })
     this.renderer.setPixelRatio(Math.min(dpr, this.movil ? 1.5 : 2))
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.15
     this.camara = new THREE.PerspectiveCamera(45, 1, 0.1, 120)
+    // Entorno neutro para que los metales y los espejos reflejen algo (sin él salen negros).
+    const pmrem = new THREE.PMREMGenerator(this.renderer)
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+    this.scene.environmentIntensity = 0.35
+    pmrem.dispose()
+    // Un solo material para todos los modelos: el atlas pone el detalle y las partes que brillan.
+    const { mapa, emisivo } = atlas()
+    this.matModelos = new THREE.MeshStandardMaterial({ map: mapa, emissiveMap: emisivo, emissive: 0xffffff, emissiveIntensity: 1.4, vertexColors: true, metalness: 0.4, roughness: 0.48 })
 
     // Luz: la estrella (fuera de plano, arriba a la derecha) más una ambiental tenue.
-    const sol = new THREE.DirectionalLight(0xfff2d6, 2.2)
+    const sol = new THREE.DirectionalLight(0xfff2d6, 2.6)
     sol.position.copy(POS_ESTRELLA)
     this.scene.add(sol)
     this.sol = sol
-    this.scene.add(new THREE.AmbientLight(0x404a66, 0.9))
+    this.scene.add(new THREE.AmbientLight(0x404a66, 0.5))
+    // Luz de relleno fría desde abajo (la que devuelve el planeta), para que la cara en sombra no sea negra.
+    this.scene.add(new THREE.HemisphereLight(0x6b7fa8, 0x1a2a4a, 0.55))
     this.luzEstrella = new THREE.PointLight(0xffd27a, 0, 40, 1.5)
     this.luzEstrella.position.copy(POS_ESTRELLA)
     this.scene.add(this.luzEstrella)
 
     // La estrella: un resplandor (sprite) con un núcleo brillante.
     this.estrella = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: texturaResplandor(), color: 0xffe3a3, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+      new THREE.SpriteMaterial({ map: texturaResplandor(), color: 0xffe3a3, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
     )
     this.estrella.position.copy(POS_ESTRELLA)
     this.estrella.scale.setScalar(7)
     this.scene.add(this.estrella)
-    const nucleo = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 24), new THREE.MeshBasicMaterial({ color: 0xfff4d0 }))
+    const nucleo = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 24), new THREE.MeshBasicMaterial({ color: 0xfff4d0, toneMapped: false }))
     nucleo.position.copy(POS_ESTRELLA)
     this.scene.add(nucleo)
     this.nucleo = nucleo
@@ -104,7 +120,7 @@ export class EscenaOrbita implements Escena {
     const largo = POS_ESTRELLA.length() - RADIO_PLANETA
     this.rayo = new THREE.Mesh(
       new THREE.CylinderGeometry(0.06, 0.3, largo, 6, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }),
     )
     // El cilindro nace vertical: lo colocamos a medio camino y lo orientamos hacia la estrella.
     const dir = POS_ESTRELLA.clone().normalize()
@@ -116,7 +132,7 @@ export class EscenaOrbita implements Escena {
     // Supernova: una esfera luminosa que se expande desde la estrella al prestigiar.
     this.supernova = new THREE.Mesh(
       new THREE.SphereGeometry(1, 24, 24),
-      new THREE.MeshBasicMaterial({ color: 0xfff1cc, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: 0xfff1cc, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }),
     )
     this.supernova.position.copy(POS_ESTRELLA)
     this.supernova.visible = false
@@ -124,10 +140,10 @@ export class EscenaOrbita implements Escena {
 
     // Cometa ocasional: cabeza brillante con cola, cruza la escena de vez en cuando (solo decorativo).
     this.cometa = new THREE.Group()
-    const cabeza = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), new THREE.MeshBasicMaterial({ color: 0xdff6ff }))
+    const cabeza = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), new THREE.MeshBasicMaterial({ color: 0xdff6ff, toneMapped: false }))
     const cola = new THREE.Mesh(
       new THREE.ConeGeometry(0.09, 2.2, 8, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }),
     )
     // El cono apunta hacia -Z (dirección de avance invertida): la cola queda detrás de la cabeza.
     cola.rotation.x = -Math.PI / 2
@@ -137,11 +153,10 @@ export class EscenaOrbita implements Escena {
     this.scene.add(this.cometa)
 
     // Planeta y atmósfera
-    const seg = this.movil ? 32 : 48
-    this.planeta = new THREE.Mesh(
-      new THREE.SphereGeometry(RADIO_PLANETA, seg, seg),
-      new THREE.MeshStandardMaterial({ color: 0x2f6fb5, roughness: 0.8, metalness: 0.05, emissive: 0x0a1a33, emissiveIntensity: 0.6 }),
-    )
+    const seg = this.movil ? 40 : 64
+    const texturas = texturasPlaneta()
+    this.matPlaneta = new THREE.MeshStandardMaterial({ map: texturas.mapa, emissiveMap: texturas.luces, emissive: 0xffffff, emissiveIntensity: this.brilloCiudades, roughness: 0.75, metalness: 0.05, envMapIntensity: 0.2 })
+    this.planeta = new THREE.Mesh(new THREE.SphereGeometry(RADIO_PLANETA, seg, seg), this.matPlaneta)
     this.scene.add(this.planeta)
     this.atmosfera = new THREE.Mesh(
       new THREE.SphereGeometry(RADIO_PLANETA * 1.1, seg, seg),
@@ -153,24 +168,6 @@ export class EscenaOrbita implements Escena {
       new THREE.MeshStandardMaterial({ map: texturaNubes(), transparent: true, opacity: 0.6, roughness: 1, depthWrite: false }),
     )
     this.scene.add(this.nubes)
-
-    // Continentes: manchas aleatorias fijas sobre la esfera.
-    const tierra = new THREE.Group()
-    const matTierra = new THREE.MeshStandardMaterial({ color: 0x4caf6a, roughness: 0.9 })
-    this.matTierra = matTierra
-    this.tierra = tierra
-    let semilla = 7
-    const rnd = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647)
-    for (let i = 0; i < 14; i++) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.25 + rnd() * 0.3, 10, 10), matTierra)
-      const u = rnd() * Math.PI * 2
-      const v = Math.acos(2 * rnd() - 1)
-      m.position.setFromSphericalCoords(RADIO_PLANETA * 0.93, v, u)
-      m.scale.set(1, 1, 0.35)
-      m.lookAt(0, 0, 0)
-      tierra.add(m)
-    }
-    this.planeta.add(tierra)
 
     // Estrellas de fondo
     const n = this.movil ? 500 : 900
@@ -199,7 +196,7 @@ export class EscenaOrbita implements Escena {
     this.luna = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 14), new THREE.MeshStandardMaterial({ color: 0xc9c4b8, roughness: 1 }))
     this.luna.visible = false
     this.scene.add(this.luna)
-    this.nebulosa = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaResplandor(), color: 0x7a5cff, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }))
+    this.nebulosa = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaResplandor(), color: 0x7a5cff, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }))
     this.nebulosa.position.set(-16, 5, -34)
     this.nebulosa.scale.set(46, 30, 1)
     this.nebulosa.visible = false
@@ -208,7 +205,7 @@ export class EscenaOrbita implements Escena {
     // Capas de órbita, una por tipo de edificio
     for (const e of CONFIG.edificios) {
       const ap = APARIENCIAS[e.id]
-      const malla = new THREE.InstancedMesh(this.geometria(ap), this.material(ap), MAX_POR_TIPO)
+      const malla = new THREE.InstancedMesh(this.geometria(e.id, ap), this.matModelos, MAX_POR_TIPO)
       malla.count = 0
       malla.frustumCulled = false
       const grupo = new THREE.Group()
@@ -238,31 +235,13 @@ export class EscenaOrbita implements Escena {
     this.distancia = this.distanciaObjetivo
   }
 
-  private geometria(ap: Apariencia): THREE.BufferGeometry {
+  /** Modelo del edificio (ver modelos.ts) a la escala de su apariencia. Los segmentos Dyson llevan el radio de la cáscara. */
+  private geometria(id: string, ap: Apariencia): THREE.BufferGeometry {
     const s = ap.tamano * 1.6
-    switch (ap.forma) {
-      case 'panel': return new THREE.BoxGeometry(s * 2.2, s * 0.08, s * 1.2)
-      case 'esfera': return new THREE.SphereGeometry(s, 14, 14)
-      case 'cubo': return new THREE.BoxGeometry(s, s, s)
-      case 'toro': return new THREE.TorusGeometry(s, s * 0.3, 8, 20)
-      case 'roca': return new THREE.DodecahedronGeometry(s, 0)
-      case 'vela': return new THREE.ConeGeometry(s, s * 2.2, 4, 1, true)
-      case 'segmento': return new THREE.TorusGeometry(s, s * 0.12, 6, 20, Math.PI * 0.5)
-    }
-  }
-
-  private material(ap: Apariencia): THREE.Material {
-    const translucido = ap.forma === 'vela' || ap.forma === 'segmento'
-    return new THREE.MeshStandardMaterial({
-      color: ap.color,
-      roughness: 0.5,
-      metalness: 0.35,
-      emissive: ap.color,
-      emissiveIntensity: 0.25,
-      transparent: translucido,
-      opacity: translucido ? 0.75 : 1,
-      side: translucido ? THREE.DoubleSide : THREE.FrontSide,
-    })
+    const g = modelo(id, this.movil ? 'bajo' : 'alto', ap.forma === 'segmento' ? ap.radio / s : 2)
+    g.scale(s, s, s)
+    g.computeBoundingSphere()
+    return g
   }
 
   private redimensionar() {
@@ -319,10 +298,10 @@ export class EscenaOrbita implements Escena {
     this.sol.color.copy(new THREE.Color(0xfff2d6).lerp(new THREE.Color(azul ? 0xcfe4ff : 0xffffff), t))
     this.escalaEstrella = azul ? 9.5 : 7 + t
 
-    // Planeta: con cada vida (Supernova) los continentes crecen y la atmósfera se espesa.
+    // Planeta: con cada vida (Supernova) las ciudades brillan más de noche y la atmósfera se espesa.
     const vida = Math.min(1, j.estado.vidas / 8)
-    this.matTierra.color.copy(new THREE.Color(0x4caf6a).lerp(new THREE.Color(0x7fd98f), vida))
-    this.tierra.scale.setScalar(1 + vida * 0.2)
+    this.brilloCiudades = 0.35 + vida * 1.6
+    this.matPlaneta.emissiveIntensity = this.brilloCiudades
     this.opacidadAtmosfera = 0.18 + vida * 0.14
 
     // Cielo: las mejoras globales compradas lo llenan de estrellas más brillantes.
@@ -341,7 +320,7 @@ export class EscenaOrbita implements Escena {
     if (this.ondas.length >= 4) this.eliminarOnda(this.ondas.shift()!)
     const onda = new THREE.Mesh(
       new THREE.RingGeometry(RADIO_PLANETA * 1.12, RADIO_PLANETA * 1.18, 48),
-      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
     )
     onda.lookAt(this.camara.position)
     this.scene.add(onda)
@@ -430,11 +409,17 @@ export class EscenaOrbita implements Escena {
         this.colocarCascara(capa, crecimiento)
         continue
       }
+      // Paneles, espejos y velas miran a la estrella; el resto apunta sus antenas al planeta.
+      const miraEstrella = ap.forma === 'panel' || ap.forma === 'vela'
+      if (miraEstrella) capa.grupo.worldToLocal(this.estrellaLocal.copy(POS_ESTRELLA))
+      const giro = ap.forma === 'toro' ? 0.35 : 0.06
       for (let i = 0; i < visibles; i++) {
         const a = fases[i] + this.tiempo * ap.velocidad
         const bamboleo = Math.sin(this.tiempo * 0.7 + fases[i]) * 0.08
         this.dummy.position.set(Math.cos(a) * ap.radio, bamboleo, Math.sin(a) * ap.radio)
-        this.dummy.rotation.set(fases[i], -a, fases[i] * 0.5 + this.tiempo * 0.3)
+        if (miraEstrella) this.dummy.lookAt(this.estrellaLocal)
+        else this.dummy.lookAt(0, 0, 0)
+        this.dummy.rotateZ(fases[i] + this.tiempo * giro)
         this.dummy.scale.setScalar(crecimiento * this.llegada(capa.nacimientos[i]))
         this.dummy.updateMatrix()
         malla.setMatrixAt(i, this.dummy.matrix)
