@@ -5,4 +5,4 @@ import { arrancar } from '../../core/arranque'
 import { CONFIG, TEXTOS } from './data'
 import { EscenaHormiguero } from './render'
 
-arrancar(CONFIG, TEXTOS, (canvas) => new EscenaHormiguero(canvas))
+arrancar(CONFIG, TEXTOS, (canvas, juego) => new EscenaHormiguero(canvas, juego))
