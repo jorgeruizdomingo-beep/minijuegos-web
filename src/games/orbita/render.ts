@@ -20,6 +20,7 @@ type Capa = {
   grupo: THREE.Group // inclinación de la órbita
   anillo: THREE.Mesh
   fases: number[]
+  nacimientos: number[] // instante (tiempo de escena) en que apareció cada unidad, para animar su llegada
   visibles: number
 }
 
@@ -31,6 +32,7 @@ export class EscenaOrbita implements Escena {
   private camara: THREE.PerspectiveCamera
   private planeta: THREE.Mesh
   private atmosfera: THREE.Mesh
+  private nubes: THREE.Mesh
   private estrella: THREE.Sprite
   private luzEstrella: THREE.PointLight
   private capas = new Map<string, Capa>()
@@ -102,6 +104,11 @@ export class EscenaOrbita implements Escena {
       new THREE.MeshBasicMaterial({ color: 0x5fb3ff, transparent: true, opacity: 0.18, side: THREE.BackSide }),
     )
     this.scene.add(this.atmosfera)
+    this.nubes = new THREE.Mesh(
+      new THREE.SphereGeometry(RADIO_PLANETA * 1.03, seg, seg),
+      new THREE.MeshStandardMaterial({ map: texturaNubes(), transparent: true, opacity: 0.6, roughness: 1, depthWrite: false }),
+    )
+    this.scene.add(this.nubes)
 
     // Continentes: manchas aleatorias fijas sobre la esfera.
     const tierra = new THREE.Group()
@@ -158,7 +165,7 @@ export class EscenaOrbita implements Escena {
       }
       this.scene.add(grupo)
       const fases = Array.from({ length: MAX_POR_TIPO }, () => Math.random() * Math.PI * 2)
-      this.capas.set(e.id, { id: e.id, malla, apariencia: ap, grupo, anillo, fases, visibles: 0 })
+      this.capas.set(e.id, { id: e.id, malla, apariencia: ap, grupo, anillo, fases, nacimientos: new Array(MAX_POR_TIPO).fill(-10), visibles: 0 })
     }
 
     this.redimensionar()
@@ -210,8 +217,11 @@ export class EscenaOrbita implements Escena {
     let radioExterior = APARIENCIAS.panel.radio
     for (const [id, capa] of this.capas) {
       const n = c[id] ?? 0
-      capa.visibles = Math.min(MAX_POR_TIPO, n)
-      capa.malla.count = capa.visibles
+      const visibles = Math.min(MAX_POR_TIPO, n)
+      // Cada compra nueva entra con una pequeña animación de llegada.
+      for (let i = capa.visibles; i < visibles; i++) capa.nacimientos[i] = this.tiempo
+      capa.visibles = visibles
+      capa.malla.count = visibles
       ;(capa.anillo.material as THREE.MeshBasicMaterial).opacity = n > 0 ? 0.22 : 0
       if (n > 0 && capa.apariencia.forma !== 'segmento') radioExterior = Math.max(radioExterior, capa.apariencia.radio)
     }
@@ -244,6 +254,15 @@ export class EscenaOrbita implements Escena {
     ;(o.malla.material as THREE.Material).dispose()
   }
 
+  /** Escala de una unidad según el tiempo desde que apareció: crece desde 0 con un pequeño rebote. */
+  private llegada(nacimiento: number): number {
+    const t = (this.tiempo - nacimiento) / 0.7
+    if (t >= 1) return 1
+    if (t <= 0) return 0.001
+    // Rebote suave: pasa de 1,25 y vuelve a 1.
+    return t < 0.6 ? (t / 0.6) * 1.25 : 1.25 - ((t - 0.6) / 0.4) * 0.25
+  }
+
   /** Reparte los segmentos Dyson sobre una esfera (espiral de Fibonacci) que gira despacio alrededor de la estrella. */
   private colocarCascara(capa: Capa, crecimiento: number) {
     const { malla, apariencia: ap, visibles } = capa
@@ -257,7 +276,7 @@ export class EscenaOrbita implements Escena {
       this.dummy.position.set(Math.cos(a) * r * ap.radio, y * ap.radio, Math.sin(a) * r * ap.radio)
       this.dummy.lookAt(0, 0, 0)
       this.dummy.rotateZ(a)
-      this.dummy.scale.setScalar(crecimiento)
+      this.dummy.scale.setScalar(crecimiento * this.llegada(capa.nacimientos[i]))
       this.dummy.updateMatrix()
       malla.setMatrixAt(i, this.dummy.matrix)
     }
@@ -272,6 +291,8 @@ export class EscenaOrbita implements Escena {
     this.atmosfera.scale.setScalar(esc)
     ;(this.atmosfera.material as THREE.MeshBasicMaterial).opacity = 0.18 + this.pulso * 0.3
     this.planeta.rotation.y += dt * 0.08
+    this.nubes.rotation.y += dt * 0.11
+    this.nubes.scale.setScalar(esc)
     this.estrella.scale.setScalar(7 + Math.sin(this.tiempo * 1.3) * 0.25 + this.pulso * 3)
     this.luzEstrella.intensity = this.pulso * 60
 
@@ -289,7 +310,7 @@ export class EscenaOrbita implements Escena {
         const bamboleo = Math.sin(this.tiempo * 0.7 + fases[i]) * 0.08
         this.dummy.position.set(Math.cos(a) * ap.radio, bamboleo, Math.sin(a) * ap.radio)
         this.dummy.rotation.set(fases[i], -a, fases[i] * 0.5 + this.tiempo * 0.3)
-        this.dummy.scale.setScalar(crecimiento)
+        this.dummy.scale.setScalar(crecimiento * this.llegada(capa.nacimientos[i]))
         this.dummy.updateMatrix()
         malla.setMatrixAt(i, this.dummy.matrix)
       }
@@ -335,6 +356,32 @@ function texturaResplandor(): THREE.Texture {
   g.addColorStop(1, 'rgba(255,180,80,0)')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, 128, 128)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
+}
+
+/** Textura de nubes: manchas blancas suaves sobre fondo transparente, sin costuras en horizontal. */
+function texturaNubes(): THREE.Texture {
+  const w = 512, h = 256
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  const ctx = c.getContext('2d')!
+  let semilla = 11
+  const rnd = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647)
+  for (let i = 0; i < 60; i++) {
+    const x = rnd() * w
+    // Menos nubes en los polos (bordes verticales de la textura).
+    const y = h * (0.15 + rnd() * 0.7)
+    const r = 12 + rnd() * 28
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r)
+    g.addColorStop(0, 'rgba(255,255,255,0.55)')
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g
+    // Dibujada tres veces para que la costura izquierda/derecha no se note.
+    for (const dx of [-w, 0, w]) ctx.fillRect(x + dx - r, y - r, r * 2, r * 2)
+  }
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.SRGBColorSpace
   return t
