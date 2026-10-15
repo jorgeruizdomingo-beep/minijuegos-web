@@ -214,7 +214,8 @@ export class UIIncremental {
     const ganables = j.prestigioGanable()
     const siguiente = j.historicoParaSiguientePrestigio()
     const bonusLogros = Math.round(j.bonusLogros * 100)
-    const firmaPrestigio = `${e.prestigio}|${e.vidas}|${ganables}|${fmt(siguiente)}|${fmt(e.historico)}|${bonusLogros}`
+    const fichas = j.fichasAlReiniciar()
+    const firmaPrestigio = `${e.prestigio}|${e.vidas}|${ganables}|${fmt(siguiente)}|${fmt(e.historico)}|${bonusLogros}|${fichas}`
     if (firmaPrestigio === this.ultimoPrestigio) return
     this.ultimoPrestigio = firmaPrestigio
     const bonus = Math.round(e.prestigio * j.config.prestigio.bonus * 100)
@@ -225,7 +226,7 @@ export class UIIncremental {
         <span class="muted">Siguiente ${t.prestigioUnidad} a <span class="mono">${fmt(siguiente)}</span> ${t.recurso} históricas (<span class="mono">${fmt(e.historico)}</span>)</span>
       </div>
       <button id="btn-prestigio" class="btn-prestigio" ${ganables > 0 ? '' : 'disabled'}>
-        ${t.prestigioAccion}${ganables > 0 ? ` (+${ganables} ${t.prestigioEmoji})` : ''}
+        ${t.prestigioAccion}${ganables > 0 ? ` (+${ganables} ${t.prestigioEmoji}${fichas > 0 && j.arbol ? ` · +${fichas} ${j.arbol.fichaEmoji}` : ''})` : ''}
       </button>
     `
   }

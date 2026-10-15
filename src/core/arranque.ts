@@ -11,6 +11,7 @@ import { activarAudio, alternarSilencio, estaSilenciado, sonidos } from './sonid
 import { abrirPanelPortar } from './portar'
 import { abrirModal } from './modal'
 import { iniciarEvento, type Evento } from './evento'
+import { abrirPanelArbol } from './arbol'
 
 export type Escena = {
   /** Ajusta la escena al tamaño de la "población" (edificios totales). */
@@ -18,6 +19,12 @@ export type Escena = {
   /** Efecto visual en el punto de clic (coordenadas relativas a la escena). */
   clic(x: number, y: number): void
   frame(dt: number): void
+  /**
+   * Opcional: algo ha cambiado en la partida (compra de edificio o mejora, nodo
+   * del árbol, prestigio, carga). La escena lee del juego (`cantidad`, `tieneMejora`,
+   * `tieneDesbloqueo`, `desbloqueos`) y adapta el mapa.
+   */
+  cambio?(motivo: 'carga' | 'edificio' | 'mejora' | 'nodo' | 'prestigio'): void
 }
 
 const MAX_TOASTS = 4
@@ -51,6 +58,7 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
         sonidos.compra()
         ui.refrescar()
         ui.destacarEdificio(id)
+        escena.cambio?.('edificio')
       }
     },
     comprarMejora(id) {
@@ -58,26 +66,32 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
         sonidos.mejora()
         ui.refrescar()
         toast('Mejora comprada 🎉', 2000)
+        escena.cambio?.('mejora')
       }
     },
     prestigiar() {
       const ganables = juego.prestigioGanable()
       if (ganables <= 0) return
       const bonus = Math.round(ganables * config.prestigio.bonus * 100)
+      const fichas = juego.fichasAlReiniciar()
+      const lineaFichas = config.arbol && fichas > 0 ? `\nAdemás recibes ${fichas} ${fichas === 1 ? config.arbol.fichaNombre : config.arbol.fichaPlural} ${config.arbol.fichaEmoji} para el árbol permanente.` : ''
       const ok = confirm(
-        `${textos.prestigioAccion} reinicia ${textos.recurso}, edificios y mejoras.\nA cambio ganas ${ganables} ${textos.prestigioUnidad}(s): +${bonus}% de producción para siempre.\n\n¿Seguimos?`,
+        `${textos.prestigioAccion} reinicia ${textos.recurso}, edificios y mejoras.\nA cambio ganas ${ganables} ${textos.prestigioUnidad}(s): +${bonus}% de producción para siempre.${lineaFichas}\n\n¿Seguimos?`,
       )
       if (!ok) return
       juego.prestigiar()
       juego.guardar()
       sonidos.prestigio()
       ui.refrescar()
-      escena.poblacion(0)
-      toast(`${textos.prestigioAccion}: hecho. ${textos.prestigioNombre}: ${juego.estado.prestigio} ${textos.prestigioEmoji}`, 5000)
+      escena.poblacion(juego.totalEdificios())
+      escena.cambio?.('prestigio')
+      refrescarBotonArbol()
+      toast(`${textos.prestigioAccion}: hecho. ${textos.prestigioNombre}: ${juego.estado.prestigio} ${textos.prestigioEmoji}${fichas > 0 && config.arbol ? ` · +${fichas} ${config.arbol.fichaEmoji}` : ''}`, 5000)
     },
   })
 
   escena = crearEscena(ui.canvas, juego)
+  escena.cambio?.('carga')
 
   let evento: Evento | null = null
   if (config.evento) {
@@ -140,6 +154,31 @@ export function arrancar(config: Config, textos: Textos, crearEscena: (canvas: H
     refrescarBotonSonido()
   })
   document.getElementById('btn-portar')?.addEventListener('click', () => abrirPanelPortar(juego, pararAutoguardado))
+  // Árbol permanente: solo si el juego lo declara; si no, el botón se oculta.
+  const btnArbol = document.getElementById('btn-arbol')
+  const refrescarBotonArbol = () => {
+    if (!btnArbol) return
+    if (!config.arbol) {
+      btnArbol.hidden = true
+      return
+    }
+    btnArbol.hidden = false
+    btnArbol.textContent = `${config.arbol.fichaEmoji} ${juego.fichas}`
+    btnArbol.title = `Árbol permanente: ${juego.fichas} ${juego.fichas === 1 ? config.arbol.fichaNombre : config.arbol.fichaPlural} sin gastar`
+    btnArbol.classList.toggle('btn-arbol--aviso', juego.fichas > 0 && config.arbol.nodos.some((n) => juego.nodoDisponible(n.id) && n.coste <= juego.fichas))
+  }
+  refrescarBotonArbol()
+  btnArbol?.addEventListener('click', () => {
+    if (!config.arbol) return
+    abrirPanelArbol(juego, (n) => {
+      sonidos.mejora()
+      juego.guardar()
+      ui.refrescar()
+      refrescarBotonArbol()
+      escena.cambio?.('nodo')
+      toast(`${n.emoji} ${n.nombre}: comprado para siempre`, 3000)
+    })
+  })
 
   const tituloBase = document.title
   let ultimo = performance.now()
