@@ -75,7 +75,7 @@ export const TEXTOS: Textos = {
   sinMejoras: 'Sigue acumulando energía: las mejoras aparecen al alcanzar hitos.',
 }
 
-/** Apariencia de cada edificio en la escena 3D: radio de órbita, tamaño, color, velocidad y forma. */
+/** Apariencia de cada edificio en la escena 3D: radio de órbita (para 'segmento', radio de la cáscara alrededor de la estrella), tamaño, color, velocidad y forma. */
 export type Apariencia = {
   radio: number
   tamano: number
@@ -93,6 +93,6 @@ export const APARIENCIAS: Record<string, Apariencia> = {
   minero: { radio: 4.5, tamano: 0.11, color: 0x9a7b5a, velocidad: 0.35, inclinacion: -0.55, forma: 'roca' },
   luna: { radio: 5.3, tamano: 0.2, color: 0xe8e4d8, velocidad: 0.25, inclinacion: 0.2, forma: 'esfera' },
   espejos: { radio: 6.1, tamano: 0.12, color: 0xc9f0ff, velocidad: 0.2, inclinacion: 0.95, forma: 'panel' },
-  colector: { radio: 7.0, tamano: 0.2, color: 0xffa54f, velocidad: 0.15, inclinacion: -0.75, forma: 'vela' },
-  dyson: { radio: 8.0, tamano: 0.45, color: 0xff6b3d, velocidad: 0.1, inclinacion: 0.15, forma: 'segmento' },
+  colector: { radio: 7.0, tamano: 0.16, color: 0xffa54f, velocidad: 0.15, inclinacion: -0.75, forma: 'vela' },
+  dyson: { radio: 2.4, tamano: 0.75, color: 0xff6b3d, velocidad: 0.12, inclinacion: 0.3, forma: 'segmento' },
 }

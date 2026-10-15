@@ -10,7 +10,7 @@ import { APARIENCIAS, CONFIG, type Apariencia } from './data'
 
 /** Objetos dibujados por tipo; a partir de ahí crecen un poco en vez de multiplicarse. */
 const MAX_POR_TIPO = 28
-const POS_ESTRELLA = new THREE.Vector3(7.5, 4.5, -8)
+const POS_ESTRELLA = new THREE.Vector3(6.5, 4.2, -8)
 const RADIO_PLANETA = 1.2
 
 type Capa = {
@@ -23,7 +23,7 @@ type Capa = {
   visibles: number
 }
 
-type Efecto = { malla: THREE.Mesh; vida: number; tipo: 'onda' | 'rayo' }
+type Onda = { malla: THREE.Mesh; vida: number }
 
 export class EscenaOrbita implements Escena {
   private renderer: THREE.WebGLRenderer
@@ -34,7 +34,9 @@ export class EscenaOrbita implements Escena {
   private estrella: THREE.Sprite
   private luzEstrella: THREE.PointLight
   private capas = new Map<string, Capa>()
-  private efectos: Efecto[] = []
+  private ondas: Onda[] = []
+  private rayo: THREE.Mesh
+  private vidaRayo = 0
   private tiempo = 0
   private pulso = 0
   private distancia = 9
@@ -74,6 +76,19 @@ export class EscenaOrbita implements Escena {
     const nucleo = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 24), new THREE.MeshBasicMaterial({ color: 0xfff4d0 }))
     nucleo.position.copy(POS_ESTRELLA)
     this.scene.add(nucleo)
+
+    // Rayo de la llamarada: un cilindro fino y luminoso entre la estrella y el planeta, reutilizado en cada clic.
+    const largo = POS_ESTRELLA.length() - RADIO_PLANETA
+    this.rayo = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.3, largo, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    )
+    // El cilindro nace vertical: lo colocamos a medio camino y lo orientamos hacia la estrella.
+    const dir = POS_ESTRELLA.clone().normalize()
+    this.rayo.position.copy(dir).multiplyScalar(RADIO_PLANETA + largo / 2)
+    this.rayo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
+    this.rayo.visible = false
+    this.scene.add(this.rayo)
 
     // Planeta y atmósfera
     const seg = this.movil ? 32 : 48
@@ -136,6 +151,11 @@ export class EscenaOrbita implements Escena {
       )
       anillo.rotation.x = Math.PI / 2
       grupo.add(anillo)
+      // Los segmentos Dyson no orbitan el planeta: van cerrando una cáscara alrededor de la estrella.
+      if (ap.forma === 'segmento') {
+        grupo.position.copy(POS_ESTRELLA)
+        anillo.visible = false
+      }
       this.scene.add(grupo)
       const fases = Array.from({ length: MAX_POR_TIPO }, () => Math.random() * Math.PI * 2)
       this.capas.set(e.id, { id: e.id, malla, apariencia: ap, grupo, anillo, fases, visibles: 0 })
@@ -193,7 +213,7 @@ export class EscenaOrbita implements Escena {
       capa.visibles = Math.min(MAX_POR_TIPO, n)
       capa.malla.count = capa.visibles
       ;(capa.anillo.material as THREE.MeshBasicMaterial).opacity = n > 0 ? 0.22 : 0
-      if (n > 0) radioExterior = Math.max(radioExterior, capa.apariencia.radio)
+      if (n > 0 && capa.apariencia.forma !== 'segmento') radioExterior = Math.max(radioExterior, capa.apariencia.radio)
     }
     // Encuadre: lo justo para que la órbita más exterior poblada quepa entera.
     // En pantallas estrechas (móvil en vertical) hay que alejarse algo más.
@@ -204,33 +224,44 @@ export class EscenaOrbita implements Escena {
   /** Llamarada: la estrella destella y lanza un rayo al planeta, que responde con una onda. */
   clic(_x: number, _y: number) {
     this.pulso = 1
+    this.vidaRayo = 1
+    this.rayo.visible = true
+    // Clicar muy rápido no debe llenar la escena de aros: como mucho 4 vivos, y nunca dos casi iguales.
+    if (this.ondas.some((o) => o.vida > 0.85)) return
+    if (this.ondas.length >= 4) this.eliminarOnda(this.ondas.shift()!)
     const onda = new THREE.Mesh(
       new THREE.RingGeometry(RADIO_PLANETA * 1.12, RADIO_PLANETA * 1.18, 48),
       new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
     )
     onda.lookAt(this.camara.position)
     this.scene.add(onda)
-    this.efectos.push({ malla: onda, vida: 1, tipo: 'onda' })
-
-    // Rayo: un cilindro fino y luminoso entre la estrella y el planeta.
-    const largo = POS_ESTRELLA.length() - RADIO_PLANETA
-    const rayo = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.3, largo, 6, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
-    )
-    // El cilindro nace vertical: lo colocamos a medio camino y lo orientamos hacia la estrella.
-    const dir = POS_ESTRELLA.clone().normalize()
-    rayo.position.copy(dir).multiplyScalar(RADIO_PLANETA + largo / 2)
-    rayo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
-    this.scene.add(rayo)
-    this.efectos.push({ malla: rayo, vida: 1, tipo: 'rayo' })
-    if (this.efectos.length > 24) this.eliminar(this.efectos.shift()!)
+    this.ondas.push({ malla: onda, vida: 1 })
   }
 
-  private eliminar(e: Efecto) {
-    this.scene.remove(e.malla)
-    e.malla.geometry.dispose()
-    ;(e.malla.material as THREE.Material).dispose()
+  private eliminarOnda(o: Onda) {
+    this.scene.remove(o.malla)
+    o.malla.geometry.dispose()
+    ;(o.malla.material as THREE.Material).dispose()
+  }
+
+  /** Reparte los segmentos Dyson sobre una esfera (espiral de Fibonacci) que gira despacio alrededor de la estrella. */
+  private colocarCascara(capa: Capa, crecimiento: number) {
+    const { malla, apariencia: ap, visibles } = capa
+    capa.grupo.rotation.y = this.tiempo * ap.velocidad
+    const dorado = Math.PI * (3 - Math.sqrt(5))
+    for (let i = 0; i < visibles; i++) {
+      // Siempre MAX_POR_TIPO huecos: los segmentos van rellenando la esfera en orden.
+      const y = 1 - (2 * (i + 0.5)) / MAX_POR_TIPO
+      const r = Math.sqrt(1 - y * y)
+      const a = dorado * i
+      this.dummy.position.set(Math.cos(a) * r * ap.radio, y * ap.radio, Math.sin(a) * r * ap.radio)
+      this.dummy.lookAt(0, 0, 0)
+      this.dummy.rotateZ(a)
+      this.dummy.scale.setScalar(crecimiento)
+      this.dummy.updateMatrix()
+      malla.setMatrixAt(i, this.dummy.matrix)
+    }
+    if (visibles > 0) malla.instanceMatrix.needsUpdate = true
   }
 
   frame(dt: number) {
@@ -249,6 +280,10 @@ export class EscenaOrbita implements Escena {
       // Más de MAX_POR_TIPO unidades: los objetos crecen un poco para seguir mostrando progreso.
       const total = this.cantidades[capa.id] ?? 0
       const crecimiento = total > MAX_POR_TIPO ? 1 + Math.log10(total / MAX_POR_TIPO) * 0.35 : 1
+      if (ap.forma === 'segmento') {
+        this.colocarCascara(capa, crecimiento)
+        continue
+      }
       for (let i = 0; i < visibles; i++) {
         const a = fases[i] + this.tiempo * ap.velocidad
         const bamboleo = Math.sin(this.tiempo * 0.7 + fases[i]) * 0.08
@@ -261,23 +296,23 @@ export class EscenaOrbita implements Escena {
       if (visibles > 0) malla.instanceMatrix.needsUpdate = true
     }
 
-    this.efectos = this.efectos.filter((e) => {
-      e.vida -= dt * (e.tipo === 'rayo' ? 2.5 : 2.2)
-      if (e.vida <= 0) {
-        this.eliminar(e)
+    this.ondas = this.ondas.filter((o) => {
+      o.vida -= dt * 2.2
+      if (o.vida <= 0) {
+        this.eliminarOnda(o)
         return false
       }
-      const mat = e.malla.material as THREE.MeshBasicMaterial
-      if (e.tipo === 'onda') {
-        e.malla.scale.setScalar(1 + (1 - e.vida) * 2.2)
-        mat.opacity = e.vida * 0.9
-      } else {
-        // El rayo se afina y se apaga; el cilindro está abierto, así que solo escalamos su grosor.
-        e.malla.scale.set(e.vida, 1, e.vida)
-        mat.opacity = e.vida * 0.85
-      }
+      o.malla.scale.setScalar(1 + (1 - o.vida) * 2.2)
+      ;(o.malla.material as THREE.MeshBasicMaterial).opacity = o.vida * 0.9
       return true
     })
+    if (this.vidaRayo > 0) {
+      this.vidaRayo = Math.max(0, this.vidaRayo - dt * 2.5)
+      // El rayo se afina y se apaga; el cilindro está abierto, así que solo escalamos su grosor.
+      this.rayo.scale.set(this.vidaRayo, 1, this.vidaRayo)
+      ;(this.rayo.material as THREE.MeshBasicMaterial).opacity = this.vidaRayo * 0.85
+      this.rayo.visible = this.vidaRayo > 0
+    }
 
     // Cámara: se aleja suavemente según crece la órbita y lleva un vaivén lento.
     this.distancia += (this.distanciaObjetivo - this.distancia) * Math.min(1, dt * 1.5)
