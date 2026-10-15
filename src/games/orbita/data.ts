@@ -59,7 +59,9 @@ export const CONFIG: Config = {
   edificios: EDIFICIOS,
   mejoras: MEJORAS,
   crecimientoCoste: 1.15,
-  prestigio: { base: 1_000_000, bonus: 0.1 },
+  // Raíz cúbica: frena el encadenado de Supernovas en partidas largas (10 núcleos a 5e7, 100 a 5e10, 1000 a 5e13).
+  // Base baja para que las partidas en curso no pierdan ritmo: hasta ~1e9 de histórico da igual o más que la raíz cuadrada anterior.
+  prestigio: { base: 50_000, bonus: 0.1, raiz: 3 },
   maxOfflineSeg: 8 * 3600,
   // Evento sorpresa del motor. Se llama "tormenta" y no "llamarada" para no confundirlo con el clic.
   evento: { nombre: 'Tormenta solar', emoji: '🌞', esperaMinSeg: 120, esperaMaxSeg: 240, visibleSeg: 12, duracionSeg: 30, mult: 7 },
