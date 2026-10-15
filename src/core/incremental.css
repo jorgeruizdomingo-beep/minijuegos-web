@@ -52,8 +52,9 @@
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-click:hover { background: rgba(255,255,255,0.02); }
-.btn-click:active { transform: none; background: rgba(245,179,66,0.06); }
+/* Más específicos que `button:hover:not(:disabled)` de base.css, que si no pintaría el botón opaco sobre la escena. */
+.btn-click:hover:not(:disabled) { background: rgba(255,255,255,0.02); border-color: transparent; }
+.btn-click:active:not(:disabled) { transform: none; background: rgba(245,179,66,0.06); }
 
 .flotante {
   position: absolute;
@@ -149,3 +150,58 @@
 
 /* `display: grid` anularía el atributo hidden del navegador. */
 .edificio[hidden] { display: none; }
+
+/* --- Juice --- */
+.contador__recurso--pulso { animation: latido 180ms ease-out; }
+@keyframes latido { 0% { transform: scale(1); } 40% { transform: scale(1.06); } 100% { transform: scale(1); } }
+.edificio--comprado { animation: destello 500ms ease-out; }
+@keyframes destello { 0% { background: rgba(245,179,66,0.35); } 100% { background: var(--panel-2); } }
+.toast--logro { border-color: #c9a227; background: linear-gradient(135deg, #3a2f12, #262b37); }
+
+/* --- Modal --- */
+.modal-fondo {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  width: min(640px, 100%);
+  max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.modal__cab { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.modal__cab h2 { margin: 0; font-size: 18px; }
+.modal__cerrar { padding: 4px 10px; }
+.modal__cuerpo { padding: 12px 16px 16px; overflow: auto; }
+
+/* --- Logros --- */
+.logros { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px; }
+.logro {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  opacity: 0.55;
+}
+.logro--ok { opacity: 1; border-color: #c9a227; }
+.logro__emoji { font-size: 22px; width: 28px; text-align: center; }
+.logro__info { display: flex; flex-direction: column; font-size: 13px; min-width: 0; }
+
+/* --- Exportar / importar --- */
+.portar__texto { width: 100%; resize: vertical; font-size: 12px; background: var(--bg-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.portar__fila { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+.portar__sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+.portar__error { color: var(--accent-2); font-size: 13px; }

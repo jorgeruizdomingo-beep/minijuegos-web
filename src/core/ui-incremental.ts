@@ -119,6 +119,24 @@ export class UIIncremental {
     return this.raiz.querySelector('#btn-click')!
   }
 
+  /** Pequeño "latido" del contador al hacer clic. */
+  pulsoContador() {
+    const el = this.raiz.querySelector<HTMLElement>('.contador__recurso')
+    if (!el) return
+    el.classList.remove('contador__recurso--pulso')
+    void el.offsetWidth // reinicia la animación
+    el.classList.add('contador__recurso--pulso')
+  }
+
+  /** Destello en la fila de un edificio recién comprado. */
+  destacarEdificio(id: string) {
+    const fila = this.filasEdificio.get(id)
+    if (!fila) return
+    fila.classList.remove('edificio--comprado')
+    void fila.offsetWidth
+    fila.classList.add('edificio--comprado')
+  }
+
   /** Texto flotante "+N" sobre el punto de clic (coordenadas relativas a la escena). */
   flotante(x: number, y: number, texto: string) {
     const escena = this.raiz.querySelector<HTMLElement>('.escena')!
