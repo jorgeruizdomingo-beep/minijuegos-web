@@ -31,6 +31,7 @@ export class EscenaHormiguero implements Escena {
   private exploradoras: Exploradora[] = []
   private particulas: Particula[] = []
   private estrellas: { x: number; y: number; f: number }[] = []
+  private luciernagas: { x: number; y: number; ang: number; f: number }[] = []
   private ancho = 0
   private alto = 0
   private dpr = 1
@@ -45,6 +46,7 @@ export class EscenaHormiguero implements Escena {
     this.redimensionar()
     new ResizeObserver(() => this.redimensionar()).observe(canvas)
     for (let i = 0; i < 40; i++) this.estrellas.push({ x: Math.random(), y: Math.random() * 0.55, f: Math.random() * 6 })
+    for (let i = 0; i < 14; i++) this.luciernagas.push({ x: Math.random(), y: 0.25 + Math.random() * 0.6, ang: Math.random() * 7, f: Math.random() * 7 })
   }
 
   private redimensionar() {
@@ -55,6 +57,12 @@ export class EscenaHormiguero implements Escena {
     this.canvas.width = this.ancho * this.dpr
     this.canvas.height = this.alto * this.dpr
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+  }
+
+  /** 0 = pleno día, 1 = noche cerrada. Ciclo de cuatro minutos. */
+  private noche() {
+    const fase = (this.tiempo % 240) / 240
+    return 0.5 - 0.5 * Math.cos(fase * Math.PI * 2)
   }
 
   private n(id: string) {
@@ -137,10 +145,11 @@ export class EscenaHormiguero implements Escena {
     this.dibujarNido()
     this.dibujarMiga()
 
-    // Hormigas del rastro
+    // Hormigas del rastro: con más producción van más deprisa.
     const hayHojas = this.n('cortadora') > 0
+    const prisa = 1 + Math.min(1.2, Math.log10(this.juego.produccionTotal() + 1) / 6)
     for (const h of this.hormigas) {
-      h.t += h.v * h.dir * dt
+      h.t += h.v * prisa * h.dir * dt
       if (h.t >= 1) { h.t = 1; h.dir = -1; h.carga = true; h.hoja = hayHojas && Math.random() < 0.4 }
       if (h.t <= 0) { h.t = 0; h.dir = 1; h.carga = false }
       const [x, y] = this.punto(h.t, h.carril)
@@ -163,6 +172,8 @@ export class EscenaHormiguero implements Escena {
       }
       this.dibujarHormiga(e.x, e.y, e.ang, null, e.fase + this.tiempo * 3)
     }
+
+    this.dibujarNoche(dt)
 
     // Partículas
     this.particulas = this.particulas.filter((p) => p.vida > 0)
@@ -188,15 +199,43 @@ export class EscenaHormiguero implements Escena {
     ctx.fillStyle = g
     ctx.fillRect(0, 0, ancho, alto)
 
-    // Con la colonia cósmica, el cielo se llena de estrellas.
-    if (this.n('cosmica') > 0) {
+    // Estrellas de noche; con la colonia cósmica, también de día.
+    const estrellas = Math.max(this.noche(), this.n('cosmica') > 0 ? 1 : 0)
+    if (estrellas > 0.05) {
       for (const s of this.estrellas) {
-        const a = 0.35 + 0.35 * Math.sin(this.tiempo * 1.5 + s.f)
+        const a = (0.35 + 0.35 * Math.sin(this.tiempo * 1.5 + s.f)) * estrellas
         ctx.fillStyle = `rgba(220,230,255,${a})`
         ctx.beginPath()
         ctx.arc(s.x * ancho, s.y * alto, 1.2, 0, Math.PI * 2)
         ctx.fill()
       }
+    }
+  }
+
+  /** Velo azulado de noche y luciérnagas sobre la escena. */
+  private dibujarNoche(dt: number) {
+    const { ctx, ancho, alto } = this
+    const n = this.noche()
+    if (n < 0.03) return
+    ctx.fillStyle = `rgba(8,12,40,${0.32 * n})`
+    ctx.fillRect(0, 0, ancho, alto)
+    for (const l of this.luciernagas) {
+      l.ang += (Math.random() - 0.5) * dt * 4
+      l.x += (Math.cos(l.ang) * 14 * dt) / ancho
+      l.y += (Math.sin(l.ang) * 10 * dt) / alto
+      if (l.x < 0.02 || l.x > 0.98) l.ang = Math.PI - l.ang
+      if (l.y < 0.2 || l.y > 0.9) l.ang = -l.ang
+      const brillo = Math.max(0, Math.sin(this.tiempo * 2.5 + l.f)) * n
+      if (brillo < 0.05) continue
+      const x = l.x * ancho
+      const y = l.y * alto
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 9)
+      g.addColorStop(0, `rgba(210,255,120,${0.9 * brillo})`)
+      g.addColorStop(1, 'rgba(210,255,120,0)')
+      ctx.fillStyle = g
+      ctx.beginPath()
+      ctx.arc(x, y, 9, 0, Math.PI * 2)
+      ctx.fill()
     }
   }
 
