@@ -11,7 +11,24 @@ const EDIFICIOS: Edificio[] = [
   { id: 'reina', nombre: 'Reina secundaria', descripcion: 'Pone huevos sin parar.', emoji: '👑', costeBase: 20_000_000, produccion: 7_800 },
   { id: 'aliado', nombre: 'Hormiguero aliado', descripcion: 'Una colonia vecina te envía tributo.', emoji: '🤝', costeBase: 330_000_000, produccion: 44_000 },
   { id: 'supercolonia', nombre: 'Supercolonia', descripcion: 'Kilómetros de túneles bajo la ciudad.', emoji: '🌍', costeBase: 5_100_000_000, produccion: 260_000 },
+  { id: 'metropoli', nombre: 'Metrópolis hormiga', descripcion: 'Rascacielos de tierra con ascensores de savia.', emoji: '🏙️', costeBase: 75_000_000_000, produccion: 1_500_000 },
+  { id: 'cosmica', nombre: 'Colonia cósmica', descripcion: 'Migas de otros planetas, por correo orbital.', emoji: '🚀', costeBase: 1_000_000_000_000, produccion: 7_500_000 },
 ]
+
+/** Mejoras extra de un edificio para partidas largas (x2 al llegar a 100 y 200 unidades). */
+function mejorasTardias(e: Edificio, nombres: [string, string]): Mejora[] {
+  const umbrales = [100, 200]
+  const multCoste = [5_000, 50_000]
+  return umbrales.map((u, i) => ({
+    id: `${e.id}_${i + 4}`,
+    nombre: nombres[i],
+    descripcion: `${e.nombre}: producción x2.`,
+    emoji: e.emoji,
+    coste: e.costeBase * multCoste[i],
+    condicion: { tipo: 'edificio', id: e.id, cantidad: u },
+    efecto: { tipo: 'edificio', id: e.id, mult: 2 },
+  }))
+}
 
 const MEJORAS: Mejora[] = [
   // Clic
@@ -20,12 +37,16 @@ const MEJORAS: Mejora[] = [
   { id: 'click_3', nombre: 'Antenas afinadas', descripcion: 'Cada clic recoge el doble.', emoji: '📡', coste: 50_000, condicion: { tipo: 'clicks', cantidad: 500 }, efecto: { tipo: 'click', mult: 2 } },
   { id: 'click_prod_1', nombre: 'Clic coordinado', descripcion: 'Cada clic añade un 1% de tu producción por segundo.', emoji: '🎯', coste: 500_000, condicion: { tipo: 'clicks', cantidad: 1_000 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.01 } },
   { id: 'click_prod_2', nombre: 'Clic en enjambre', descripcion: 'Cada clic añade otro 1% de tu producción por segundo.', emoji: '🌪️', coste: 50_000_000, condicion: { tipo: 'clicks', cantidad: 3_000 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.01 } },
+  { id: 'click_4', nombre: 'Mandíbulas de acero', descripcion: 'Cada clic recoge el doble.', emoji: '🦾', coste: 5_000_000_000, condicion: { tipo: 'clicks', cantidad: 7_500 }, efecto: { tipo: 'click', mult: 2 } },
+  { id: 'click_prod_3', nombre: 'Clic de la reina', descripcion: 'Cada clic añade otro 2% de tu producción por segundo.', emoji: '👑', coste: 500_000_000_000, condicion: { tipo: 'clicks', cantidad: 15_000 }, efecto: { tipo: 'clickPorcentajeProd', porcentaje: 0.02 } },
 
   // Globales
   { id: 'global_1', nombre: 'Feromonas de rastro', descripcion: 'Toda la producción +10%.', emoji: '🧪', coste: 10_000, condicion: { tipo: 'total', cantidad: 5_000 }, efecto: { tipo: 'global', mult: 1.1 } },
   { id: 'global_2', nombre: 'Rutas optimizadas', descripcion: 'Toda la producción +15%.', emoji: '🗺️', coste: 1_000_000, condicion: { tipo: 'total', cantidad: 500_000 }, efecto: { tipo: 'global', mult: 1.15 } },
   { id: 'global_3', nombre: 'Turnos de noche', descripcion: 'Toda la producción +20%.', emoji: '🌙', coste: 100_000_000, condicion: { tipo: 'total', cantidad: 50_000_000 }, efecto: { tipo: 'global', mult: 1.2 } },
   { id: 'global_4', nombre: 'Mente colmena', descripcion: 'Toda la producción +25%.', emoji: '🧠', coste: 10_000_000_000, condicion: { tipo: 'total', cantidad: 5_000_000_000 }, efecto: { tipo: 'global', mult: 1.25 } },
+  { id: 'global_5', nombre: 'Imperio subterráneo', descripcion: 'Toda la producción +30%.', emoji: '🏛️', coste: 1_000_000_000_000, condicion: { tipo: 'total', cantidad: 500_000_000_000 }, efecto: { tipo: 'global', mult: 1.3 } },
+  { id: 'global_6', nombre: 'Conciencia cósmica', descripcion: 'Toda la producción +50%.', emoji: '🌌', coste: 100_000_000_000_000, condicion: { tipo: 'total', cantidad: 50_000_000_000_000 }, efecto: { tipo: 'global', mult: 1.5 } },
 
   // Por edificio
   ...mejorasDeEdificio(EDIFICIOS[0], ['Cestas de hoja', 'Doble turno', 'Obreras veteranas']),
@@ -37,6 +58,21 @@ const MEJORAS: Mejora[] = [
   ...mejorasDeEdificio(EDIFICIOS[6], ['Jalea real', 'Cámaras reales', 'Dinastía']),
   ...mejorasDeEdificio(EDIFICIOS[7], ['Tratado de migas', 'Embajadoras', 'Federación']),
   ...mejorasDeEdificio(EDIFICIOS[8], ['Metro hormiga', 'Ciudad bajo ciudad', 'Imperio']),
+  ...mejorasDeEdificio(EDIFICIOS[9], ['Ascensores de savia', 'Barrios colgantes', 'Capital del hormiguero']),
+  ...mejorasDeEdificio(EDIFICIOS[10], ['Cohetes de semilla', 'Estación migaja', 'Terraformadoras']),
+
+  // Tardías (100 y 200 unidades)
+  ...mejorasTardias(EDIFICIOS[0], ['Legión obrera', 'Marea negra']),
+  ...mejorasTardias(EDIFICIOS[1], ['Cartografía total', 'Nada sin descubrir']),
+  ...mejorasTardias(EDIFICIOS[2], ['Deforestación amable', 'Selva portátil']),
+  ...mejorasTardias(EDIFICIOS[3], ['Cosecha eterna', 'Montañas de grano']),
+  ...mejorasTardias(EDIFICIOS[4], ['Autopistas de tierra', 'Núcleo del planeta']),
+  ...mejorasTardias(EDIFICIOS[5], ['Bosque de esporas', 'Micelio infinito']),
+  ...mejorasTardias(EDIFICIOS[6], ['Corte real', 'Matriarcado']),
+  ...mejorasTardias(EDIFICIOS[7], ['Liga de colonias', 'Paz de las migas']),
+  ...mejorasTardias(EDIFICIOS[8], ['Continente hormiga', 'Pangea']),
+  ...mejorasTardias(EDIFICIOS[9], ['Megalópolis', 'Ecumenópolis']),
+  ...mejorasTardias(EDIFICIOS[10], ['Enjambre estelar', 'Galaxia de migas']),
 ]
 
 export const CONFIG: Config = {
